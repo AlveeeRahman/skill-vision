@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://gol-d-al.github.io/skill-vision/sitemap.xml
