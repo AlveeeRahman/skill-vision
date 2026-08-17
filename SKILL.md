@@ -1,9 +1,9 @@
 ---
-name: skill-doctor
+name: skill-vision
 description: "Validate, test, and score the quality of Agent Skills for Claude Code and claude.ai. Comprehensive meta-skill: structure validation, Python script testing (syntax + imports + runtime + output format), multi-dimensional quality scoring with letter grades and tier classification (BASIC/STANDARD/POWERFUL). Use when authoring a new skill, auditing existing skills for tier promotion, setting up pre-commit hooks for skill quality, or integrating skill QA into CI."
 ---
 
-# Skill Doctor
+# Skill Vision
 
 *Boards your Agent Skills and inspects every plank before they sail — validation, script testing, and quality scoring.*
 
@@ -115,9 +115,9 @@ Four dimensions, 25% each: **Documentation** (depth, examples, references), **Co
 - name: "validate-changed-skills"
   run: |
     for skill in $changed_skills; do
-      python3 skill-doctor/scripts/skill_validator.py "$skill" --json
-      python3 skill-doctor/scripts/script_tester.py "$skill"
-      python3 skill-doctor/scripts/quality_scorer.py "$skill" --minimum-score 75
+      python3 skill-vision/scripts/skill_validator.py "$skill" --json
+      python3 skill-vision/scripts/script_tester.py "$skill"
+      python3 skill-vision/scripts/quality_scorer.py "$skill" --minimum-score 75
     done
 ```
 

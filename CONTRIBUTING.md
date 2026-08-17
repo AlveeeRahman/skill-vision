@@ -1,4 +1,4 @@
-# Contributing to skill-doctor
+# Contributing to skill-vision
 
 Thanks for considering a contribution. This is a small, focused QA tool — the bar for
 changes is correctness, not size.
@@ -17,7 +17,7 @@ push and pull request).
 
 ## Two hard rules
 
-1. **The repo must stay spec-conformant.** skill-doctor validates itself; this command
+1. **The repo must stay spec-conformant.** skill-vision validates itself; this command
    must report `CONFORMANT` (zero errors) before and after your change:
 
    ```bash

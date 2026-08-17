@@ -6,7 +6,7 @@ labels: enhancement
 assignees: ""
 ---
 
-**What should skill-doctor check or do that it currently does not?**
+**What should skill-vision check or do that it currently does not?**
 
 <!-- One or two sentences. -->
 
