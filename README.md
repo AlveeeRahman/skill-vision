@@ -1,20 +1,20 @@
-# Skill Pirate — the QA skill for Claude Code
+# Skill Doctor — the QA skill for Claude Code
 
-[![CI](https://github.com/Gol-D-Al/skill-pirate/actions/workflows/ci.yml/badge.svg)](https://github.com/Gol-D-Al/skill-pirate/actions/workflows/ci.yml)
+[![CI](https://github.com/Gol-D-Al/skill-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/Gol-D-Al/skill-doctor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![Zero runtime dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#%EF%B8%8F-under-the-hood-the-five-validators)
 
-**skill-pirate** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude — *"validate my skill"* — and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
+**skill-doctor** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude — *"validate my skill"* — and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
 
 ## ⚓ Get it aboard
 
 ```bash
 # All your projects (personal skill):
-git clone https://github.com/Gol-D-Al/skill-pirate.git ~/.claude/skills/skill-pirate
+git clone https://github.com/Gol-D-Al/skill-doctor.git ~/.claude/skills/skill-doctor
 
 # Or one project only (project skill — ships to your team through git):
-git clone https://github.com/Gol-D-Al/skill-pirate.git .claude/skills/skill-pirate
+git clone https://github.com/Gol-D-Al/skill-doctor.git .claude/skills/skill-doctor
 ```
 
 That's the whole install — no packages, no venv (any Python 3.9+). Then ask Claude, in your own words:
@@ -30,7 +30,7 @@ Claude reads this skill's instructions, picks the right validator, runs it, and 
 The repo is itself a valid skill, so it inspects its own hull. Genuine output on a fresh clone:
 
 ```text
-=== skill-pirate  [tool] ===
+=== skill-doctor  [tool] ===
   · INFO    DEEP_NESTING: assets/sample-skill/references/api-reference.md is nested 3 levels deep.
               → Keep reference files shallow so they are easy to discover.
   · INFO    GIT_DIR: A .git directory is present (normal for a cloned skill).
@@ -38,7 +38,7 @@ The repo is itself a valid skill, so it inspects its own hull. Genuine output on
   CONFORMANT  (0 errors, 0 warnings, 2 notes)
 ```
 
-It even notices its own `.git` directory and tells you how to keep it out of your upload. A pirate who won't inspect his own ship can't be trusted with yours.
+It even notices its own `.git` directory and tells you how to keep it out of your upload. A doctor who skips his own checkup can't be trusted with yours.
 
 ## How it works
 
@@ -54,15 +54,15 @@ flowchart LR
     security --> verdict{{"Verdict<br/>CONFORMANT + grade A+ to F"}}
 ```
 
-`scripts/spec_validator.py` rules on the letter of the Agent Skills spec — the rules that decide whether a skill actually loads, uploads, and triggers. The other four grade house-standard quality: structure and docs, script execution, a four-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins** — skill-pirate never asks you to pad a concise skill to satisfy someone's style guide.
+`scripts/spec_validator.py` rules on the letter of the Agent Skills spec — the rules that decide whether a skill actually loads, uploads, and triggers. The other four grade house-standard quality: structure and docs, script execution, a four-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins** — skill-doctor never asks you to pad a concise skill to satisfy someone's style guide.
 
-## Why skill-pirate, and not another "skill-tester"?
+## Why skill-doctor, and not another "skill-tester"?
 
-Several projects already occupy the obvious name — `Facets-cloud/claude-skill-tester`,
+Several projects already occupy that name — `Facets-cloud/claude-skill-tester`,
 `skill-tester-swarm`, `openclaw-skill-tester`, and the `skill-tester` meta-skill inside
-the big claude-skills monorepos (from which this project descends). The unique name is
-deliberate. (Not to be confused with `pirate-skill`, Google Gemini's talk-like-a-pirate
-demo — this is a QA skill.) The differences are substance, not branding:
+the big claude-skills monorepos (from which this project descends). This one is named
+for what it does: it examines your skills and tells you exactly what would keep them
+from loading, uploading, or triggering. The differences are substance, not branding:
 
 - **Spec-first, opinions second.** Spec conformance ([the rules](references/agent-skills-spec.md)
   that break a skill) and house-standard quality (opinions) are separate verdicts from
@@ -85,13 +85,21 @@ demo — this is a QA skill.) The differences are substance, not branding:
 **claude.ai / Claude Desktop** — skills upload as a ZIP containing one top-level folder with `SKILL.md` inside it:
 
 ```bash
-# From the directory that contains skill-pirate/ — note the .git exclusion:
-zip -r skill-pirate.zip skill-pirate -x "skill-pirate/.git/*" "skill-pirate/.git"
+# From the directory that contains skill-doctor/ — note the .git exclusion:
+zip -r skill-doctor.zip skill-doctor -x "skill-doctor/.git/*" "skill-doctor/.git"
 ```
 
 Upload at **Settings → Features → Skills** (claude.ai) or **"+" → Create skill** (Desktop). One caveat: the web uploader caps the frontmatter `description` at **200 characters** (the spec allows 1024, and this repo ships 460, tuned for Claude Code triggering). Shorten it in your zip copy — e.g. *"Validate, test, and score Agent Skills before you ship: spec conformance, structure checks, script testing, quality grades A–F, and security posture."*
 
-**Claude API** — upload the same ZIP via the beta skills endpoints (`client.beta.skills.create`) and attach it with `container: {skills: [{type: "custom", skill_id: ...}]}`. The API execution container has no network and no package installs — skill-pirate is stdlib-only precisely so it runs there unmodified.
+Skills enabled on claude.ai can also come back to the CLI — a one-time
+
+```bash
+CLAUDE_CODE_SYNC_SKILLS=1 claude -p "load skills"
+```
+
+downloads them into `~/.claude/skills/synced/`, where every future local Claude Code session loads them automatically (re-run it after updating a skill on claude.ai).
+
+**Claude API** — upload the same ZIP via the beta skills endpoints (`client.beta.skills.create`) and attach it with `container: {skills: [{type: "custom", skill_id: ...}]}`. The API execution container has no network and no package installs — skill-doctor is stdlib-only precisely so it runs there unmodified.
 
 **A spec rule this repo demonstrates:** a package may contain exactly one `SKILL.md`, at its root. That's why the bundled demo skill ships its manifest as `assets/sample-skill/SKILL.md.fixture` — restore the name only while practicing on it:
 
@@ -146,20 +154,20 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - name: Get skill-pirate
-        run: git clone --depth 1 https://github.com/Gol-D-Al/skill-pirate.git /tmp/skill-pirate
+      - name: Get skill-doctor
+        run: git clone --depth 1 https://github.com/Gol-D-Al/skill-doctor.git /tmp/skill-doctor
       - name: Validate all skills
         run: |
-          python /tmp/skill-pirate/scripts/spec_validator.py skills --recursive
+          python /tmp/skill-doctor/scripts/spec_validator.py skills --recursive
           for skill in skills/*/; do
-            python /tmp/skill-pirate/scripts/quality_scorer.py "$skill" --minimum-score 75
+            python /tmp/skill-doctor/scripts/quality_scorer.py "$skill" --minimum-score 75
           done
 ```
 
 ```bash
 #!/bin/bash
 # .git/hooks/pre-commit — block commits that break the skill
-python3 ~/.claude/skills/skill-pirate/scripts/spec_validator.py path/to/your-skill || {
+python3 ~/.claude/skills/skill-doctor/scripts/spec_validator.py path/to/your-skill || {
     echo "Skill violates the Agent Skills spec. Commit blocked."
     exit 1
 }
@@ -185,7 +193,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): how to run the tests, and the ship's two
 
 ## 🏴‍☠️ Join the crew
 
-- **⭐ Star the repo** if skill-pirate kept a broken skill from shipping — it helps other skill authors find it.
-- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-pirate/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
+- **⭐ Star the repo** if skill-doctor kept a broken skill from shipping — it helps other skill authors find it.
+- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-doctor/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
 
 *Fair winds, and may your skills always load on the first try.*

@@ -1,9 +1,9 @@
 ---
-name: skill-pirate
-description: "Validate, test, and score the quality of skills within the claude-skills ecosystem. Comprehensive meta-skill: structure validation, Python script testing (syntax + imports + runtime + output format), multi-dimensional quality scoring with letter grades and tier classification (BASIC/STANDARD/POWERFUL). Use when authoring a new skill, auditing existing skills for tier promotion, setting up pre-commit hooks for skill quality, or integrating skill QA into CI."
+name: skill-doctor
+description: "Validate, test, and score the quality of Agent Skills for Claude Code and claude.ai. Comprehensive meta-skill: structure validation, Python script testing (syntax + imports + runtime + output format), multi-dimensional quality scoring with letter grades and tier classification (BASIC/STANDARD/POWERFUL). Use when authoring a new skill, auditing existing skills for tier promotion, setting up pre-commit hooks for skill quality, or integrating skill QA into CI."
 ---
 
-# Skill Pirate
+# Skill Doctor
 
 *Boards your Agent Skills and inspects every plank before they sail — validation, script testing, and quality scoring.*
 
@@ -112,9 +112,9 @@ Four dimensions, 25% each: **Documentation** (depth, examples, references), **Co
 - name: "validate-changed-skills"
   run: |
     for skill in $changed_skills; do
-      python3 skill-pirate/scripts/skill_validator.py "$skill" --json
-      python3 skill-pirate/scripts/script_tester.py "$skill"
-      python3 skill-pirate/scripts/quality_scorer.py "$skill" --minimum-score 75
+      python3 skill-doctor/scripts/skill_validator.py "$skill" --json
+      python3 skill-doctor/scripts/script_tester.py "$skill"
+      python3 skill-doctor/scripts/quality_scorer.py "$skill" --minimum-score 75
     done
 ```
 
