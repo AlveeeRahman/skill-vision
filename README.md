@@ -1,4 +1,4 @@
-# Skill Doctor — the QA skill for Claude Code
+# Skill Doctor — the QA skill for Claude skills
 
 [![CI](https://github.com/Gol-D-Al/skill-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/Gol-D-Al/skill-doctor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
