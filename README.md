@@ -174,7 +174,6 @@ python3 ~/.claude/skills/skill-pirate/scripts/spec_validator.py path/to/your-ski
 - **`references/`** — the standards the tools implement: [agent-skills-spec.md](references/agent-skills-spec.md), [skill-structure-specification.md](references/skill-structure-specification.md), [tier-requirements-matrix.md](references/tier-requirements-matrix.md), [quality-scoring-rubric.md](references/quality-scoring-rubric.md), [validator-comparison.md](references/validator-comparison.md).
 - **`assets/sample-skill/`** — a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
 - **`tests/`** — 95 adversarial checks on the validators themselves.
-- **`TRAINING_LOG.md`** — this repo's maintenance log, in a machine-parseable schema.
 
 ## Contributing
 
@@ -187,6 +186,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): how to run the tests, and the ship's two
 ## 🏴‍☠️ Join the crew
 
 - **⭐ Star the repo** if skill-pirate kept a broken skill from shipping — it helps other skill authors find it.
-- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-pirate/issues). This repository is maintained with the help of an autonomous local agent; [TRAINING_LOG.md](TRAINING_LOG.md) records every real maintenance event — what changed, why, and what failed along the way.
+- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-pirate/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
 
 *Fair winds, and may your skills always load on the first try.*
