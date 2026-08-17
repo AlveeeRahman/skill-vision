@@ -95,25 +95,27 @@ from loading, uploading, or triggering. The differences are substance, not brand
 ## Field results: a 20-skill audit
 
 All five validators were run over a private corpus of 20 real, in-use skills (145 Python
-scripts, ~45k script LOC), anonymized as `Sk2`–`Sk20` and ranked by quality score — rank 1
-is skill-doctor auditing itself (84.8 structure, B+ quality; its row is left out of the
-table below so the corpus speaks for itself). Corpus verdict: **19/20 spec-conformant** (the one error: a
-SKILL.md body at ~8.2k tokens against the ~5k budget), **0 verified security
+scripts, ~45k script LOC). Skills are anonymized: the ten best are labeled `Sk1`–`Sk10`
+below, ordered by quality score. skill-doctor audited itself with the same tools (84.8
+structure, B+ quality) and is excluded from the ranking so the corpus speaks for itself.
+Corpus verdict: **19/20 spec-conformant** (the one error: a SKILL.md body at ~8.2k tokens
+against the ~5k budget — you can spot it in the table), **0 verified security
 vulnerabilities**, 145/145 scripts syntax-valid.
 
 ### Top 10 by quality score
 
-| # | Skill | Type | Spec | Structure | Quality | Security | ~Tokens |
-|--:|---|---|:---:|--:|--:|--:|--:|
-| 2 | Sk2 | router | pass | 92.2 | 66.2 | 81.7 | 2.7k |
-| 3 | Sk3 | tool | pass | 80.6 | 65.0 | 87.0 | 1.0k |
-| 4 | Sk4 | router | pass | 71.5 | 63.3 | 79.7 | 2.0k |
-| 5 | Sk5 | tool | pass | 88.2 | 62.2 | 86.0 | 3.3k |
-| 6 | Sk6 | tool | pass | 84.6 | 62.2 | 86.0 | 3.3k |
-| 7 | Sk9 | tool | pass | 84.1 | 60.9 | 80.7 | 1.1k |
-| 8 | Sk7 | router | pass | 82.4 | 60.6 | 80.9 | 2.8k |
-| 9 | Sk8 | router | pass | 67.9 | 57.3 | 78.0 | 2.2k |
-| 10 | Sk13 | tool | pass | 58.8 | 56.0 | 80.5 | 2.2k |
+| Skill | Type | Spec | Structure | Quality | Security | ~Tokens |
+|---|---|:---:|--:|--:|--:|--:|
+| Sk1 | router | pass | 92.2 | 66.2 | 81.7 | 2.7k |
+| Sk2 | tool | pass | 80.6 | 65.0 | 87.0 | 1.0k |
+| Sk3 | router | pass | 71.5 | 63.3 | 79.7 | 2.0k |
+| Sk4 | tool | pass | 88.2 | 62.2 | 86.0 | 3.3k |
+| Sk5 | tool | pass | 84.6 | 62.2 | 86.0 | 3.3k |
+| Sk6 | tool | pass | 84.1 | 60.9 | 80.7 | 1.1k |
+| Sk7 | router | pass | 82.4 | 60.6 | 80.9 | 2.8k |
+| Sk8 | router | pass | 67.9 | 57.3 | 78.0 | 2.2k |
+| Sk9 | tool | pass | 58.8 | 56.0 | 80.5 | 2.2k |
+| Sk10 | tool | fail | 70.2 | 55.9 | 80.6 | 8.3k |
 
 What the audit says about skills in the wild:
 
