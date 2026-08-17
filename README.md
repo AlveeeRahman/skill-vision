@@ -1,6 +1,96 @@
 # Skill Pirate — Quality Assurance for Agent Skills
 
+[![CI](https://github.com/Gol-D-Al/skill-pirate/actions/workflows/ci.yml/badge.svg)](https://github.com/Gol-D-Al/skill-pirate/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![Zero runtime dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#requirements)
+
 **skill-pirate** boards your Agent Skills and inspects every plank before they sail: spec validation, script testing, and quality scoring before you ship.
+
+## ⚓ Try it in 30 seconds
+
+No install step, no dependencies — the repo is itself a valid skill, so it can inspect its own hull:
+
+```bash
+git clone https://github.com/Gol-D-Al/skill-pirate.git
+cd skill-pirate
+python3 scripts/spec_validator.py .
+```
+
+What that actually prints on a fresh clone (genuine output, lightly trimmed):
+
+```text
+=== skill-pirate  [tool] ===
+  ! WARNING JUNK_FILES: Build or editor artifacts present: .git
+              → These bloat the package and leak local state. Remove before publishing.
+  · INFO    UNREACHABLE_FROM_SKILL_MD: assets/sample-skill/README.md is linked from another file but not reachable from SKILL.md.
+  · INFO    DEEP_NESTING: assets/sample-skill/references/api-reference.md is nested 3 levels deep.
+  · INFO    REFERENCE_NO_TOC: references/validator-comparison.md is 110 lines with no table of contents.
+  CONFORMANT  (0 errors, 1 warnings, 4 notes)
+```
+
+Yes — it flags its own `.git` directory as packaging junk. A pirate who won't inspect his own ship can't be trusted with yours.
+
+## Table of Contents
+
+- [⚓ Try it in 30 seconds](#-try-it-in-30-seconds)
+- [🧭 How it works](#-how-it-works)
+- [Getting Started](#getting-started)
+- [Why skill-pirate, and not another "skill-tester"?](#why-skill-pirate-and-not-another-skill-tester)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Components](#components)
+- [🔍 Features](#-features)
+- [CI/CD Integration](#cicd-integration)
+- [Quality Standards](#quality-standards)
+- [Self-Testing](#self-testing)
+- [Advanced Usage](#advanced-usage)
+- [Error Handling](#error-handling)
+- [Output Formats](#output-formats)
+- [Requirements](#requirements)
+- [Contributing](#contributing)
+- [License](#license)
+- [🏴‍☠️ Join the crew](#-join-the-crew)
+
+## 🧭 How it works
+
+A skill passes through five independent inspections, each a standalone stdlib-only CLI. Run one, or run the whole gauntlet:
+
+```mermaid
+flowchart LR
+    skill[/"your-skill/"/] --> spec["spec_validator<br/>loads, uploads, triggers?"]
+    spec --> house["skill_validator<br/>house structure and docs"]
+    house --> tester["script_tester<br/>do bundled scripts run?"]
+    tester --> quality["quality_scorer<br/>4-dimension score"]
+    quality --> security["security_scorer<br/>risk posture"]
+    security --> verdict{{"Verdict<br/>CONFORMANT + grade A+ to F"}}
+```
+
+`scripts/spec_validator.py` rules on the letter of the Agent Skills spec (CONFORMANT or not); `scripts/skill_validator.py` and `scripts/quality_scorer.py` grade house-standard quality; `scripts/script_tester.py` exercises the bundled scripts; `scripts/security_scorer.py` scores risk posture. Where spec and house opinion disagree, **the spec wins**.
+
+## Getting Started
+
+No install step and no dependencies — clone and run (Python 3.9+):
+
+```bash
+git clone https://github.com/Gol-D-Al/skill-pirate.git
+cd skill-pirate
+
+# 1. Spec conformance — does the skill load, upload, and trigger?
+python3 scripts/spec_validator.py path/to/your-skill
+
+# 2. House-standard structure and documentation
+python3 scripts/skill_validator.py path/to/your-skill
+
+# 3. Multi-dimensional quality score with letter grade
+python3 scripts/quality_scorer.py path/to/your-skill
+```
+
+No skill handy? Point it at itself — the repo is a valid skill and validates clean:
+
+```bash
+python3 scripts/spec_validator.py .
+```
 
 ## Why skill-pirate, and not another "skill-tester"?
 
@@ -25,10 +115,22 @@ demo — this is a QA tool.) The differences are substance, not branding:
   A validator that is not itself tested is folklore.
 - **Security posture scoring.** `scripts/security_scorer.py` is a dimension the
   alternatives don't have.
-- **Zero dependencies.** Python stdlib only — runs on a clean Python 3.7+ install.
+- **Zero dependencies.** Python stdlib only — runs on a clean Python 3.9+ install
+  (CI-tested on 3.9 through 3.13).
 - **Honest about the competition.** [references/validator-comparison.md](references/validator-comparison.md)
   documents how this tool compares to `skills-ref`, `agent-ecosystem/skill-validator`,
   and `agent-skills-lint` — *including where those tools are ahead*.
+
+### At a glance
+
+| Capability | skill-pirate | Typical "skill-tester" |
+| --- | :---: | :---: |
+| Spec conformance checking (loads, uploads, triggers) | ✅ | ❌ |
+| House-quality scoring kept *separate* from spec rules | ✅ | ❌ |
+| Adversarial self-tests (93 pytest checks on the validators themselves) | ✅ | ❌ |
+| Security posture scoring | ✅ | ❌ |
+| Zero dependencies (Python stdlib only) | ✅ | ❌ |
+| Honest, documented comparison with competitors | ✅ | ❌ |
 
 ## Overview
 
@@ -94,7 +196,10 @@ python scripts/quality_scorer.py engineering/my-skill --detailed --json
   rm assets/sample-skill/SKILL.md   # restore packageable state
   ```
 
-## Features
+## 🔍 Features
+
+<details>
+<summary><b>Validation, testing, and scoring capabilities</b> — expand for the full inventory</summary>
 
 ### Validation Capabilities
 - SKILL.md format and content validation
@@ -113,14 +218,19 @@ python scripts/quality_scorer.py engineering/my-skill --detailed --json
 
 ### Quality Assessment
 - Documentation quality scoring (25%)
-- Code quality evaluation (25%)  
+- Code quality evaluation (25%)
 - Completeness assessment (25%)
 - Usability analysis (25%)
 - Letter grade assignment (A+ to F)
 - Tier recommendation generation
 - Improvement roadmap creation
 
+</details>
+
 ## CI/CD Integration
+
+<details>
+<summary><b>GitHub Actions workflow and pre-commit hook</b> — copy-paste recipes</summary>
 
 ### GitHub Actions Example
 ```yaml
@@ -128,16 +238,16 @@ name: Skill Quality Gate
 on:
   pull_request:
     paths: ['engineering/**']
-    
+
 jobs:
   validate-skills:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Validate Skills
         run: |
           for skill in $(git diff --name-only ${{ github.event.before }} | grep -E '^engineering/[^/]+/' | cut -d'/' -f1-2 | sort -u); do
@@ -158,7 +268,12 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
+</details>
+
 ## Quality Standards
+
+<details>
+<summary><b>The standards every script in this repo is held to</b></summary>
 
 ### All Scripts
 - **Zero External Dependencies** - Python standard library only
@@ -172,6 +287,8 @@ fi
 - **Content Analysis** - Deep parsing of SKILL.md and documentation
 - **Code Analysis** - AST-based Python code validation
 - **Compliance Scoring** - Objective, repeatable quality assessment
+
+</details>
 
 ## Self-Testing
 
@@ -189,6 +306,9 @@ python scripts/quality_scorer.py . --detailed
 ```
 
 ## Advanced Usage
+
+<details>
+<summary><b>Batch validation, quality monitoring, and custom thresholds</b></summary>
 
 ### Batch Validation
 ```bash
@@ -213,18 +333,28 @@ python scripts/quality_scorer.py engineering/my-skill --minimum-score 80
 # Exit code 0 = passed, 1 = failed, 2 = needs improvement
 ```
 
+</details>
+
 ## Error Handling
+
+<details>
+<summary><b>How the scripts fail, and what they tell you when they do</b></summary>
 
 All scripts provide comprehensive error handling:
 - **File System Errors** - Missing files, permission issues, invalid paths
-- **Content Errors** - Malformed YAML, invalid JSON, encoding issues  
+- **Content Errors** - Malformed YAML, invalid JSON, encoding issues
 - **Execution Errors** - Script timeouts, runtime failures, import errors
 - **Validation Errors** - Standards violations, compliance failures
 
+</details>
+
 ## Output Formats
 
+<details>
+<summary><b>Human-readable report and JSON</b> — sample of each</summary>
+
 ### Human-Readable
-```
+```text
 === SKILL VALIDATION REPORT ===
 Skill: engineering/my-skill
 Overall Score: 85.2/100 (B+)
@@ -256,14 +386,30 @@ SUGGESTIONS:
 }
 ```
 
+</details>
+
 ## Requirements
 
-- **Python 3.7+** - No external dependencies required
-- **File System Access** - Read access to skill directories  
+- **Python 3.9+** - No external dependencies required (CI-tested on 3.9–3.13)
+- **File System Access** - Read access to skill directories
 - **Execution Permissions** - Ability to run Python scripts for testing
 
 ## Contributing
 
-See [SKILL.md](SKILL.md) for comprehensive documentation and contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run the tests, the two hard rules
+(the repo must stay spec-CONFORMANT, and `scripts/` stays stdlib-only), and how to
+propose changes. [SKILL.md](SKILL.md) holds the comprehensive skill documentation.
 
 skill-pirate itself serves as a reference implementation of POWERFUL-tier quality standards.
+
+## License
+
+[MIT](LICENSE) — copyright (c) 2026 MrPirate.
+
+## 🏴‍☠️ Join the crew
+
+- **⭐ Star the repo** if skill-pirate kept a broken skill from shipping — it helps other skill authors find it.
+- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-pirate/issues). Worth knowing before you do: this repository is maintained by an autonomous local agent, and incoming issues are read and triaged by it. [TRAINING_LOG.md](TRAINING_LOG.md) is its machine-parseable log of every real maintenance event — what changed, why, how it was verified, and what failed along the way.
+- **Want to send a pull request?** Start with [CONTRIBUTING.md](CONTRIBUTING.md); the ship's two hard rules are that the repo stays spec-CONFORMANT and `scripts/` stays stdlib-only.
+
+*Fair winds, and may your skills always load on the first try.*
