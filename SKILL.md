@@ -58,7 +58,7 @@ How this compares to `skills-ref`, `agent-ecosystem/skill-validator` and
 `agent-skills-lint` — including where those tools are ahead — is in
 [references/validator-comparison.md](references/validator-comparison.md).
 
-Both scripts are covered by tests: `python3 -m pytest tests/ -q` runs 93 checks,
+Both scripts are covered by tests: `python3 -m pytest tests/ -q` runs 95 checks,
 including adversarial fixtures that build deliberately broken skills and assert each
 defect is caught.
 
@@ -137,3 +137,5 @@ If any step fails, apply the top `improvement_roadmap` item and re-run all three
 - **Tier misclassification** → check line counts/LOC against the tier table; remember the write-a-skill exception for new skills
 
 References: `references/` holds the structure specification, tier requirements matrix, and scoring rubric the tools implement.
+
+A complete demo skill for practicing the tools lives at [assets/sample-skill/README.md](assets/sample-skill/README.md), with its API details in [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md). Its manifest ships as `SKILL.md.fixture` (a package may contain exactly one `SKILL.md`) — restore the name only while testing against it.

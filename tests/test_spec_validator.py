@@ -261,6 +261,21 @@ class SpecValidatorTestCase(unittest.TestCase):
         root = build(self.tmp, "sample-skill", GOOD_FM)
         self.assertNotIn("JUNK_FILES", self.codes(root))
 
+    def test_git_dir_is_note_not_junk_warning(self):
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     files={".git/HEAD": "ref: refs/heads/main"})
+        codes = self.codes(root)
+        self.assertNotIn("JUNK_FILES", codes)
+        self.assertIn("GIT_DIR", codes)
+
+    def test_git_dir_does_not_mask_real_junk(self):
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     files={".git/HEAD": "ref: refs/heads/main",
+                            "scripts/__pycache__/x.cpython-312.pyc": "junk"})
+        codes = self.codes(root)
+        self.assertIn("JUNK_FILES", codes)
+        self.assertIn("GIT_DIR", codes)
+
     # --- skill type detection -----------------------------------------------------
 
     def test_type_detection_router(self):

@@ -4,6 +4,14 @@ An honest capability map against the skill validators available publicly, so you
 when to reach for something else. Researched February 2026; tooling in this space moves
 quickly, so re-check before relying on a row.
 
+## Contents
+
+- [The alternatives](#the-alternatives)
+- [Capability map](#capability-map)
+- [Where this one is genuinely ahead](#where-this-one-is-genuinely-ahead)
+- [Where the others are ahead](#where-the-others-are-ahead)
+- [Recommended combination](#recommended-combination)
+
 ## The alternatives
 
 | Tool | What it is |

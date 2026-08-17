@@ -484,8 +484,14 @@ def check_links(root: Path, body: str, res: Result) -> None:
 def check_packaging_hygiene(root: Path, res: Result) -> None:
     """Files that should never ship inside a skill package."""
     junk = []
+    has_git = False
     for p in root.rglob("*"):
         rel = p.relative_to(root)
+        # .git is expected in a cloned skill and is excluded at packaging
+        # time, so it gets its own informational note instead of a warning.
+        if ".git" in rel.parts:
+            has_git = True
+            continue
         if any(part in JUNK_PATTERNS for part in rel.parts) or p.suffix in JUNK_SUFFIXES:
             junk.append(rel.parts[0] if rel.parts[0] in JUNK_PATTERNS else rel)
     if junk:
@@ -493,6 +499,11 @@ def check_packaging_hygiene(root: Path, res: Result) -> None:
         res.add("warning", "JUNK_FILES",
                 f"Build or editor artifacts present: {', '.join(uniq)}",
                 "These bloat the package and leak local state. Remove before publishing.")
+    if has_git:
+        res.add("info", "GIT_DIR",
+                "A .git directory is present (normal for a cloned skill).",
+                "Exclude it when zipping for upload: "
+                "zip -r skill.zip . -x '.git/*' '.git'")
 
     for p in root.rglob("*"):
         if p.is_file() and p.stat().st_size > 2_000_000:
