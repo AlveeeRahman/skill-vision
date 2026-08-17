@@ -14,7 +14,7 @@ following labeled fields, as a bullet list, in this order, with these meanings:
 
 ```
 - **timestamp**: ISO date of the event (YYYY-MM-DD)
-- **task_type**: one of repo-init | rename | docs | ci | community-health | agent-behavior | cleanup
+- **task_type**: one of repo-init | rename | docs | ci | community-health | agent-behavior | agent-fix | cleanup
 - **instruction**: what the maintainer was trying to achieve, phrased imperatively like a prompt
 - **context**: repo/world state before the action
 - **action_taken**: what was done, naming real files
@@ -158,14 +158,58 @@ smoothly — failure entries are the most valuable training signal in this file.
 - **outcome**: success
 - **lesson**: Interactivity in a README is structure, not decoration — put proof above the fold, collapse depth behind `<details>`, and verify renderer-specific rules (blank lines, slugs, mermaid dialect) instead of assuming markdown is markdown.
 
+## entry-009: GH007 push rejection — private email scrubbed from history
+
+- **timestamp**: 2026-08-17
+- **task_type**: cleanup
+- **instruction**: Push the "Professionalize repo: CI, community health, interactive README, training log" commit to GitHub; when the push is rejected for exposing a private email address, scrub the address from all commits — including the already-pushed initial commit — and push cleanly.
+- **context**: Both commits (initial 6746799 and the new professionalize commit 036107a) were authored as MrPirate with the owner's private iCloud address, and the initial commit was already on `origin/main` with that address in public history. The GitHub account Gol-D-Al has email-privacy push protection enabled, which rejects any push introducing the private address.
+- **action_taken**: `git push` was REJECTED by GitHub with GH007 "push would publish a private email address". Fix: obtained the account's public numeric ID (108018107) from the public users API; set git `user.email` to `108018107+Gol-D-Al@users.noreply.github.com`; rewrote BOTH commits with `git filter-branch --env-filter`, overriding author AND committer email; then `git push --force-with-lease` — which itself first failed with "stale info", because filter-branch had rewritten the remote-tracking ref `refs/remotes/origin/main` too, so the lease no longer matched the real remote; fixed by `git fetch` and retrying the force-with-lease push, which succeeded.
+- **diff_summary**: Zero tree changes — pure history rewrite: 6746799 → 309dfa2 and 036107a → 0c6841b, author and committer email changed to the noreply address on both; pre-rewrite commits survive locally under `refs/original/` (including `refs/original/refs/remotes/origin/main`, the fingerprint of the tracking-ref rewrite).
+- **rationale**: Rewriting history was chosen over the quick alternative — disabling the account's email-privacy protection to let the push through — because that would have permanently published the private address in the initial commit; the numeric-ID noreply form is GitHub's stable documented alias, so authorship attribution is preserved; `--force-with-lease` over bare `--force` so a concurrent remote change could not be silently clobbered (and its "stale info" failure was in fact correct behavior given the rewritten tracking ref).
+- **verification**: `git log --format="%h %ae" origin/main` → `0c6841b 108018107+Gol-D-Al@users.noreply.github.com` / `309dfa2 108018107+Gol-D-Al@users.noreply.github.com` — only the noreply address in public history; `git for-each-ref` confirms `main` and `origin/main` agree at 0c6841b, with the private-email originals only in local `refs/original/` backups.
+- **likely_errors**: Rewriting only the author email and forgetting the committer email, so GH007 fires again; `--force-with-lease` failing with "stale info" after filter-branch because the remote-tracking ref was rewritten (happened here — fetch first, then retry); force-pushing rewritten history breaking any existing clones' fast-forwards; leaving `refs/original/` backups around so the private address still lurks in the local repo and any future mirror-push.
+- **outcome**: fixed-after-failure
+- **lesson**: On accounts with email-privacy push protection, author with the numeric noreply address from the very first commit — and remember filter-branch rewrites remote-tracking refs too, so `git fetch` before trusting `--force-with-lease`.
+
+## entry-010: Server-side security hardening via gh api
+
+- **timestamp**: 2026-08-17
+- **task_type**: community-health
+- **instruction**: Harden the GitHub repository's server-side security settings via `gh api`: scanning, alerts, least-privilege workflow tokens, and branch protection on `main` that gates on CI without locking out the solo owner or the automation.
+- **context**: After the history scrub and push, the repo was public with green CI but factory-default settings: no branch protection, no secret scanning, no dependency alerts, and default-writable Actions tokens. The repo is worked by a solo owner plus the repo-keeper agent, which pushes only `agent/*` branches and opens PRs the owner merges himself.
+- **action_taken**: Enabled via `gh api`: vulnerability alerts; automated security fixes; secret scanning plus secret-scanning push protection; private vulnerability reporting; Actions workflow token default permissions set to read-only; and branch protection on `main` with required status checks naming the five CI matrix jobs ("Python 3.9", "Python 3.10", "Python 3.11", "Python 3.12", "Python 3.13"), `strict=false`, `enforce_admins=false` (the owner can still push `main` directly), force-pushes and branch deletion blocked, conversation resolution required, and no required PR reviews.
+- **diff_summary**: Zero file changes — every change is server-side repository configuration; the repo's tree and history are untouched.
+- **rationale**: `enforce_admins=false` because the owner's workflow includes direct pushes to `main` (enabling it would have locked him out of his own release path); no required reviews because a solo maintainer cannot review his own merges of agent PRs — the five required CI contexts are the real quality gate; workflow tokens read-only matches the least-privilege `permissions: contents: read` already declared in `.github/workflows/ci.yml`.
+- **verification**: `gh api repos/Gol-D-Al/skill-pirate/branches/main/protection` read back: required checks exactly `["Python 3.9","Python 3.10","Python 3.11","Python 3.12","Python 3.13"]`, `strict=false`, `enforce_admins=false`, `allow_force_pushes=false`, `allow_deletions=false`, `required_conversation_resolution=true` — matching the intended configuration field for field.
+- **likely_errors**: Renaming CI matrix jobs later silently breaks the required-checks contexts (`main` becomes unmergeable until protection is updated to the new names); `enforce_admins=true` would have locked the owner out of his own direct-push workflow; private vulnerability reporting now slightly contradicts `SECURITY.md`'s report-via-public-issues wording — a candidate future docs fix; settings applied by API but never read back can silently no-op on typo'd endpoints.
+- **outcome**: success
+- **lesson**: Branch protection contexts are coupled to CI job names by exact string — treat a matrix job rename as a breaking change, and always read settings back after writing them via API.
+
+## entry-011: Empirical verification of automation access after hardening
+
+- **timestamp**: 2026-08-17
+- **task_type**: agent-behavior
+- **instruction**: Prove — not assume — that after the security hardening, the repo-keeper agent's write path (`agent/*` branches and PRs) still works and only `main` is constrained.
+- **context**: Entry-010 had just added branch protection and tightened tokens. repo-keeper's whole operating model depends on pushing `agent/*` branches; a protection rule or missing token scope that blocked those pushes would silently kill the automation, and nothing in the settings pages directly answers "can this token still push a non-main branch?".
+- **action_taken**: Confirmed the active token's scopes via `gh auth status`: `gist`, `read:org`, `repo`, `workflow` — the `workflow` scope being what had allowed pushing `.github/workflows/ci.yml` in the first place. Then tested the write path empirically: pushed a throwaway branch `agent/perm-test` carrying one empty commit, confirmed the push was accepted, and deleted the branch on the remote. Confirmed branch protection constrains only `main`, so repo-keeper's `agent/*` PR workflow is unaffected.
+- **diff_summary**: No lasting changes anywhere — one empty commit on a temporary remote branch, created and remotely deleted within the test; repo tree, history, and settings all unchanged.
+- **rationale**: An empirical probe was chosen over reasoning from the settings because access is the product of several interacting layers (token scopes, branch protection patterns, Actions token policy) and the cheapest conclusive test is a real push; an empty commit on a clearly-named throwaway branch proves write access with zero risk to content.
+- **verification**: `gh auth status` → token scopes `'gist', 'read:org', 'repo', 'workflow'`; push of `agent/perm-test` accepted by the remote and the branch then deleted remotely without protection errors; protection re-read shows rules applying to `main` only.
+- **likely_errors**: Concluding from green settings pages that automation still works when a protection pattern like `*` would also catch `agent/*`; a token missing the `workflow` scope failing only on the subset of pushes that touch `.github/workflows/`, which a trivial probe branch without workflow changes would not surface; forgetting to delete the probe branch and leaving junk refs on the remote.
+- **outcome**: success
+- **lesson**: After any permissions or protection change, verify the automation's write path empirically with a throwaway probe rather than reasoning from settings.
+
 ## How to add entries
 
-Append new events to the end of this file as `## entry-NNN: <title>` sections, where
-NNN continues the sequence (next: entry-009). Copy the exact field list from the schema
+Append new events to the end of this file as `## entry-NNN: <title>` sections — the
+next number is always the highest existing NNN + 1. Copy the exact field list from the schema
 block at the top — same fields, same order, one bullet per field. Ground every claim in
 `git log`, `git diff`, or real command output; paste verification results as they
 actually appeared. Use inline code for file paths, reference only paths that exist
 (this file is link-checked by `scripts/spec_validator.py`), and record failures honestly
 with `outcome: failure` or `fixed-after-failure` — a truthful failure entry is worth
-more as training data than a polished success. After appending, re-run
-`python3 scripts/spec_validator.py .` and confirm the repo is still `CONFORMANT`.
+more as training data than a polished success. Note that the autonomous maintainer
+(repo-keeper) appends `task_type: agent-fix` entries automatically for its own changes,
+so gaps in the human-authored sequence may be filled by the agent. After appending,
+re-run `python3 scripts/spec_validator.py .` and confirm the repo is still `CONFORMANT`.
