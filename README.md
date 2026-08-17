@@ -96,34 +96,24 @@ from loading, uploading, or triggering. The differences are substance, not brand
 
 All five validators were run over a private corpus of 20 real, in-use skills (145 Python
 scripts, ~45k script LOC), anonymized as `Sk2`–`Sk20` and ranked by quality score — rank 1
-is skill-doctor auditing itself. Corpus verdict: **19/20 spec-conformant** (the one error: a
+is skill-doctor auditing itself (84.8 structure, B+ quality; its row is left out of the
+table below so the corpus speaks for itself). Corpus verdict: **19/20 spec-conformant** (the one error: a
 SKILL.md body at ~8.2k tokens against the ~5k budget), **0 verified security
-vulnerabilities**, 145/145 scripts syntax-valid. The doctor's setup classification:
-**11 good, 4 need work, 5 bad.**
+vulnerabilities**, 145/145 scripts syntax-valid.
 
 ### Top 10 by quality score
 
-| # | Skill | Type | Spec | Structure | Quality | Grade | Security | ~Tokens | Setup verdict |
-|--:|---|---|:---:|--:|--:|:--:|--:|--:|---|
-| 1 | skill-doctor (this tool) | tool | pass | 84.8 | 83.0 | B+ | 78.0 | 2.0k | good |
-| 2 | Sk2 | router | pass | 92.2 | 66.2 | C+ | 81.7 | 2.7k | good |
-| 3 | Sk3 | tool | pass | 80.6 | 65.0 | C | 87.0 | 1.0k | good |
-| 4 | Sk4 | router | pass | 71.5 | 63.3 | C | 79.7 | 2.0k | good |
-| 5 | Sk5 | tool | pass | 88.2 | 62.2 | C | 86.0 | 3.3k | good |
-| 6 | Sk6 | tool | pass | 84.6 | 62.2 | C | 86.0 | 3.3k | good |
-| 7 | Sk9 | tool | pass | 84.1 | 60.9 | C | 80.7 | 1.1k | good |
-| 8 | Sk7 | router | pass | 82.4 | 60.6 | C | 80.9 | 2.8k | good |
-| 9 | Sk8 | router | pass | 67.9 | 57.3 | C- | 78.0 | 2.2k | good |
-| 10 | Sk13 | tool | pass | 58.8 | 56.0 | C- | 80.5 | 2.2k | needs work |
-
-```mermaid
-xychart-beta
-    title "Top 10 — quality score (bar) vs house structure score (line)"
-    x-axis ["doctor", "Sk2", "Sk3", "Sk4", "Sk5", "Sk6", "Sk9", "Sk7", "Sk8", "Sk13"]
-    y-axis "Score (0-100)" 0 --> 100
-    bar [83.0, 66.2, 65.0, 63.3, 62.2, 62.2, 60.9, 60.6, 57.3, 56.0]
-    line [84.8, 92.2, 80.6, 71.5, 88.2, 84.6, 84.1, 82.4, 67.9, 58.8]
-```
+| # | Skill | Type | Spec | Structure | Quality | Security | ~Tokens |
+|--:|---|---|:---:|--:|--:|--:|--:|
+| 2 | Sk2 | router | pass | 92.2 | 66.2 | 81.7 | 2.7k |
+| 3 | Sk3 | tool | pass | 80.6 | 65.0 | 87.0 | 1.0k |
+| 4 | Sk4 | router | pass | 71.5 | 63.3 | 79.7 | 2.0k |
+| 5 | Sk5 | tool | pass | 88.2 | 62.2 | 86.0 | 3.3k |
+| 6 | Sk6 | tool | pass | 84.6 | 62.2 | 86.0 | 3.3k |
+| 7 | Sk9 | tool | pass | 84.1 | 60.9 | 80.7 | 1.1k |
+| 8 | Sk7 | router | pass | 82.4 | 60.6 | 80.9 | 2.8k |
+| 9 | Sk8 | router | pass | 67.9 | 57.3 | 78.0 | 2.2k |
+| 10 | Sk13 | tool | pass | 58.8 | 56.0 | 80.5 | 2.2k |
 
 What the audit says about skills in the wild:
 
@@ -251,6 +241,34 @@ python3 ~/.claude/skills/skill-doctor/scripts/spec_validator.py path/to/your-ski
 - **`references/`** — the standards the tools implement: [agent-skills-spec.md](references/agent-skills-spec.md), [skill-structure-specification.md](references/skill-structure-specification.md), [tier-requirements-matrix.md](references/tier-requirements-matrix.md), [quality-scoring-rubric.md](references/quality-scoring-rubric.md), [validator-comparison.md](references/validator-comparison.md).
 - **`assets/sample-skill/`** — a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
 - **`tests/`** — 117 adversarial checks on the validators themselves.
+
+## 🩺 The doctor's paradox — a challenge
+
+Want a fun one? Improve skill-doctor — then make the *current* doctor examine the *new*
+doctor before the new one is allowed to practice:
+
+```bash
+# 1. Keep the incumbent doctor around
+git clone https://github.com/Gol-D-Al/skill-doctor.git /tmp/incumbent
+
+# 2. Make your improvements in your working copy,
+#    then let the incumbent judge the candidate…
+python3 /tmp/incumbent/scripts/spec_validator.py .             # does the new doctor still load?
+python3 /tmp/incumbent/scripts/quality_scorer.py . --detailed  # did the grade go up, or down?
+
+# 3. …and reverse the stethoscope: the candidate examines the incumbent
+python3 scripts/quality_scorer.py /tmp/incumbent --detailed
+```
+
+House rule for pull requests: **the candidate must score at least as well under the
+incumbent as the incumbent scores under the candidate** — no doctor gets to lower the bar
+for its own checkup. And if your new doctor finds a *real* bug in the old one, that is the
+highest honor this repo awards: document it, and it joins the defect table above.
+
+**Brag with numbers.** Ran the doctor on your own best skill? Post its report header — the
+token line, the `CONFORMANT` verdict, and your quality score — in an
+[issue labeled `checkup`](https://github.com/Gol-D-Al/skill-doctor/issues/new?labels=checkup&title=Checkup%3A+my-skill).
+The highest verified score on the ward earns a permanent shout-out in this README.
 
 ## Contributing
 
