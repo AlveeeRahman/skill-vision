@@ -57,7 +57,7 @@ flowchart LR
         quality --> security["security_scorer<br/>risk posture"]
     end
     spec --> house
-    security --> verdict{{"👁️ Verdict<br/>CONFORMANT or not<br/>grade A+ to F · ~tokens"}}
+    security --> verdict{{"👀 Verdict<br/>CONFORMANT or not<br/>grade A+ to F · ~tokens"}}
     classDef specStyle fill:#f59e0b,stroke:#b45309,color:#1f2937
     classDef houseStyle fill:#3b82f6,stroke:#1d4ed8,color:#ffffff
     classDef verdictStyle fill:#22c55e,stroke:#15803d,color:#1f2937
@@ -244,7 +244,7 @@ python3 ~/.claude/skills/skill-vision/scripts/spec_validator.py path/to/your-ski
 - **`assets/sample-skill/`** — a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
 - **`tests/`** — 117 adversarial checks on the validators themselves.
 
-## 👁️ Who checks the checker? — a challenge
+## 👀 Who checks the checker? — a challenge
 
 Want a fun one? Improve skill-vision — then make the *current* checker examine the *new*
 one before it takes over:
