@@ -29,6 +29,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+# Importing (and being imported) must not litter the skill under audit —
+# or the harness's own spec pass will flag the bytecode it just wrote.
+sys.dont_write_bytecode = True
+
 # Import Security Scorer module
 from security_scorer import SecurityScorer
 try:
@@ -1094,6 +1098,10 @@ class QualityScorer:
                 dimension.add_suggestion(detail)
 
             if result.get("has_critical_vulnerabilities"):
+                # Mirror security_scorer's critical cap so both tools report
+                # the same security number for the same skill — they used to
+                # disagree by up to 50 points here.
+                self._security_cap = 30.0
                 dimension.add_suggestion(
                     "CRITICAL: security scan flagged a critical vulnerability - "
                     "score is capped at 30 until it is resolved"
@@ -1103,8 +1111,11 @@ class QualityScorer:
             self.log_verbose(f"Security scoring failed: {str(e)}")
             dimension.add_score("security_error", 0, 100, f"Security scoring failed: {str(e)}")
             dimension.add_suggestion("Fix security scoring module integration")
-        
+
         dimension.calculate_final_score()
+        cap = getattr(self, "_security_cap", None)
+        if cap is not None:
+            dimension.score = min(dimension.score, cap)
         self.report.add_dimension(dimension)
 
 

@@ -22,8 +22,12 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+# Scripts under test must not leave __pycache__ droppings inside the skill
+# being audited — the validators would then flag the mess they made.
+_SUBPROC_ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
 from typing import Dict, List, Any, Optional, Tuple, Union
 import threading
 
@@ -39,7 +43,7 @@ class ScriptTestResult:
     def __init__(self, script_path: str):
         self.script_path = script_path
         self.script_name = Path(script_path).name
-        self.timestamp = datetime.utcnow().isoformat() + "Z"
+        self.timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self.tests = {}
         self.overall_status = "PENDING"
         self.execution_time = 0.0
@@ -83,14 +87,20 @@ class TestSuite:
     
     def __init__(self, skill_path: str):
         self.skill_path = skill_path
-        self.timestamp = datetime.utcnow().isoformat() + "Z"
+        self.timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self.script_results = {}
         self.summary = {}
         self.global_errors = []
         
     def add_script_result(self, result: ScriptTestResult):
-        """Add a script test result"""
-        self.script_results[result.script_name] = result
+        """Add a script test result, keyed by path relative to scripts/ —
+        nested layouts can legitimately reuse a basename (helpers/_common.py,
+        parsers/_common.py), and keying on the basename silently dropped one."""
+        try:
+            key = str(Path(result.script_path).relative_to(Path(self.skill_path) / "scripts"))
+        except ValueError:
+            key = result.script_name
+        self.script_results[key] = result
         
     def add_global_error(self, error: str):
         """Add a global error message"""
@@ -118,13 +128,14 @@ class TestSuite:
             "no_tests": statuses.count("NO_TESTS")
         }
         
-        # Determine overall status
-        if self.summary["failed"] == 0 and self.summary["no_tests"] == 0:
-            self.summary["overall_status"] = "PASS"
-        elif self.summary["passed"] > 0:
+        # Determine overall status. Any hard failure fails the suite —
+        # passing scripts must never dilute a failure into a softer verdict.
+        if self.summary["failed"] > 0:
+            self.summary["overall_status"] = "FAIL"
+        elif self.summary["no_tests"] > 0:
             self.summary["overall_status"] = "PARTIAL"
         else:
-            self.summary["overall_status"] = "FAIL"
+            self.summary["overall_status"] = "PASS"
 
 
 class ScriptTester:
@@ -156,8 +167,13 @@ class ScriptTester:
                 self.test_suite.add_global_error("No scripts directory found")
                 return self.test_suite
                 
-            # Find all Python scripts
-            python_files = list(scripts_dir.glob("*.py"))
+            # Find all Python scripts, recursively — many skills organize
+            # scripts/ into sub-packages, and a top-level-only glob silently
+            # skipped every nested script while reporting green.
+            python_files = sorted(
+                p for p in scripts_dir.rglob("*.py")
+                if "__pycache__" not in p.parts
+            )
             if not python_files:
                 self.test_suite.add_global_error("No Python scripts found in scripts directory")
                 return self.test_suite
@@ -206,8 +222,8 @@ class ScriptTester:
             # Test 1: Syntax validation
             self._test_syntax(content, result)
             
-            # Test 2: Import validation  
-            self._test_imports(content, result)
+            # Test 2: Import validation
+            self._test_imports(content, result, Path(script_path))
             
             # Unit-test modules are driven by a test runner, not by CLI flags,
             # so the argparse and dual-output-format requirements do not apply.
@@ -257,13 +273,13 @@ class ScriptTester:
                            {"error": str(e), "line": getattr(e, 'lineno', 'unknown')})
             result.add_error(f"Syntax error: {str(e)}")
             
-    def _test_imports(self, content: str, result: ScriptTestResult):
+    def _test_imports(self, content: str, result: ScriptTestResult, script_path: Path = None):
         """Test import statements for external dependencies"""
         self.log_verbose("Testing imports...")
-        
+
         try:
             tree = ast.parse(content)
-            external_imports = self._find_external_imports(tree)
+            external_imports = self._find_external_imports(tree, script_path)
             
             if not external_imports:
                 result.add_test("imports_valid", True, "Uses only standard library imports")
@@ -276,8 +292,25 @@ class ScriptTester:
         except Exception as e:
             result.add_test("imports_valid", False, f"Error analyzing imports: {str(e)}")
             
-    def _find_external_imports(self, tree: ast.AST) -> List[str]:
-        """Find external (non-stdlib) imports"""
+    def _is_skill_local_module(self, module_name: str, script_path: Path) -> bool:
+        """A sibling module or package bundled with the skill is not an
+        external dependency — `from helpers import x` next to helpers/ is
+        the skill importing its own code."""
+        if script_path is None:
+            return False
+        roots = {script_path.parent}
+        skill_scripts = Path(self.skill_path) / "scripts"
+        if skill_scripts.is_dir():
+            roots.add(skill_scripts)
+            roots.update(p for p in skill_scripts.rglob("*") if p.is_dir()
+                         and "__pycache__" not in p.parts)
+        for root in roots:
+            if (root / f"{module_name}.py").exists() or (root / module_name / "__init__.py").exists():
+                return True
+        return False
+
+    def _find_external_imports(self, tree: ast.AST, script_path: Path = None) -> List[str]:
+        """Find external (non-stdlib, non-skill-local) imports"""
         # Comprehensive standard library module list
         stdlib_modules = {
             # Built-in modules
@@ -301,7 +334,9 @@ class ScriptTester:
             'gzip', 'bz2', 'lzma', 'zlib', 'binascii', 'quopri', 'uu',
             'configparser', 'netrc', 'xdrlib', 'plistlib', 'token', 'tokenize',
             'keyword', 'heapq', 'bisect', 'array', 'weakref', 'types',
-            'copyreg', 'shelve', 'marshal', 'dbm', 'sqlite3', 'zoneinfo'
+            'copyreg', 'shelve', 'marshal', 'dbm', 'sqlite3', 'zoneinfo',
+            'stat', 'posixpath', 'ntpath', 'genericpath', 'concurrent',
+            'tomllib', 'graphlib'
         }
         
         external_imports = []
@@ -310,12 +345,14 @@ class ScriptTester:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     module_name = alias.name.split('.')[0]
-                    if module_name not in stdlib_modules and not module_name.startswith('_'):
+                    if (module_name not in stdlib_modules and not module_name.startswith('_')
+                            and not self._is_skill_local_module(module_name, script_path)):
                         external_imports.append(alias.name)
-                        
+
             elif isinstance(node, ast.ImportFrom) and node.module:
                 module_name = node.module.split('.')[0]
-                if module_name not in stdlib_modules and not module_name.startswith('_'):
+                if (module_name not in stdlib_modules and not module_name.startswith('_')
+                        and not self._is_skill_local_module(module_name, script_path)):
                     external_imports.append(node.module)
                     
         return list(set(external_imports))
@@ -399,13 +436,22 @@ class ScriptTester:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
-                cwd=script_path.parent
+                cwd=script_path.parent,
+                env=_SUBPROC_ENV
             )
             
-            # Script might exit with error code if no args provided, but shouldn't crash
-            if process.returncode in (0, 1, 2):  # 0=success, 1=general error, 2=misuse
-                result.add_test("basic_execution", True, 
+            # Script might exit with an error code if no args are provided —
+            # that's graceful. An uncaught traceback also exits 1, and that IS
+            # a crash: accepting bare exit codes made this check unfailable.
+            crashed = (process.returncode == 1
+                       and "Traceback (most recent call last" in process.stderr)
+            if process.returncode in (0, 1, 2) and not crashed:  # 0=success, 1=graceful error, 2=usage
+                result.add_test("basic_execution", True,
                                f"Script runs without crashing (exit code: {process.returncode})")
+            elif crashed:
+                last_line = process.stderr.strip().splitlines()[-1] if process.stderr.strip() else ""
+                result.add_test("basic_execution", False,
+                               f"Script crashes with an uncaught exception: {last_line}")
             else:
                 result.add_test("basic_execution", False,
                                f"Script crashed with exit code {process.returncode}",
@@ -431,7 +477,8 @@ class ScriptTester:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
-                cwd=script_path.parent
+                cwd=script_path.parent,
+                env=_SUBPROC_ENV
             )
             
             if process.returncode == 0:
@@ -492,9 +539,10 @@ class ScriptTester:
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,
-                    cwd=script_path.parent
+                    cwd=script_path.parent,
+                    env=_SUBPROC_ENV
                 )
-                
+
                 tested_files += 1
                 
                 if process.returncode == 0:
@@ -552,7 +600,8 @@ class ScriptTester:
                         capture_output=True,
                         text=True,
                         timeout=10,
-                        cwd=script_path.parent
+                        cwd=script_path.parent,
+                        env=_SUBPROC_ENV
                     )
                     if process.returncode == 0:
                         json_support = True

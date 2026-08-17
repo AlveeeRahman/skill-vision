@@ -11,6 +11,7 @@ Version: 2.0.0
 """
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -51,39 +52,46 @@ GOOD_PRACTICE_BONUS: int = 3  # Bonus for good security practices
 # PRE-COMPILED REGEX PATTERNS - Sensitive Data Detection
 # =============================================================================
 
-# Hardcoded credentials patterns (CRITICAL severity)
+# Hardcoded credentials patterns (CRITICAL severity).
+# Anchored to an assignment at statement position (start of line, optionally a
+# dotted/underscored prefix such as `self.` or `OPENROUTER_`): an "api_key ="
+# inside a string literal or help text (e.g. print("export API_KEY='...'"))
+# is documentation, not a credential.
 PATTERN_HARDCODED_PASSWORD = re.compile(
-    r'password\s*=\s*["\'][^"\']{4,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?password\s*=\s*["\'][^"\']{4,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_API_KEY = re.compile(
-    r'api_key\s*=\s*["\'][^"\']{8,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?api_key\s*=\s*["\'][^"\']{8,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_SECRET = re.compile(
-    r'secret\s*=\s*["\'][^"\']{4,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?secret\s*=\s*["\'][^"\']{4,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_TOKEN = re.compile(
-    r'token\s*=\s*["\'][^"\']{8,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?token\s*=\s*["\'][^"\']{8,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_PRIVATE_KEY = re.compile(
-    r'private_key\s*=\s*["\'][^"\']{20,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?private_key\s*=\s*["\'][^"\']{20,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_AWS_KEY = re.compile(
-    r'aws_access_key\s*=\s*["\'][^"\']{16,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?aws_access_key\s*=\s*["\'][^"\']{16,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 PATTERN_HARDCODED_AWS_SECRET = re.compile(
-    r'aws_secret\s*=\s*["\'][^"\']{20,}["\']',
-    re.IGNORECASE
+    r'^\s*(?:[\w.]*[._])?aws_secret\s*=\s*["\'][^"\']{20,}["\']',
+    re.IGNORECASE | re.MULTILINE
 )
 
-# Multi-line string patterns (CRITICAL severity)
+# Multi-line string patterns (CRITICAL severity). The delimiters must be a
+# matched homogeneous pair (""" with """), and the sensitive word must sit in
+# a key:value/key=value position — a docstring merely *mentioning* "token",
+# or a cluster of mixed quotes like strip('"').strip("'"), is not a secret.
 PATTERN_MULTILINE_STRING = re.compile(
-    r'["\']{3}[^"\']*?(?:password|api_key|secret|token|private_key)[^"\']*?["\']{3}',
+    r'("""|\'\'\')(?:(?!\1).)*?(?:password|api_key|secret|token|private_key)\s*[:=](?:(?!\1).)*?\1',
     re.IGNORECASE | re.DOTALL
 )
 
@@ -162,8 +170,10 @@ PATTERN_PATH_RESOLVE = re.compile(r'\.resolve\s*\(', re.IGNORECASE)
 # Dangerous patterns (CRITICAL severity)
 PATTERN_OS_SYSTEM = re.compile(r'os\.system\s*\(')
 PATTERN_OS_POPEN = re.compile(r'os\.popen\s*\(')
-PATTERN_EVAL = re.compile(r'eval\s*\(')
-PATTERN_EXEC = re.compile(r'exec\s*\(')
+# Negative lookbehind: `run_eval(` and `self._recommend_retrieval(` contain
+# the substring but are not calls to the builtin.
+PATTERN_EVAL = re.compile(r'(?<![\w.])eval\s*\(')
+PATTERN_EXEC = re.compile(r'(?<![\w.])exec\s*\(')
 
 # Subprocess with shell=True (HIGH severity)
 PATTERN_SUBPROCESS_SHELL_TRUE = re.compile(
@@ -204,6 +214,33 @@ PATTERN_VALIDATE_FUNC = re.compile(r'validate', re.IGNORECASE)
 PATTERN_SANITIZE_FUNC = re.compile(r'sanitize', re.IGNORECASE)
 
 
+def _blank_docstrings(content: str) -> str:
+    """Return `content` with module/class/function docstrings blanked out.
+
+    Docstrings frequently *describe* dangerous constructs (`eval()`,
+    `os.system()`, credential formats) without containing them. Blanking
+    replaces each docstring line with an empty line, so the overall line
+    numbering — and therefore finding locations — is unchanged. On any
+    parse failure the original content is returned untouched.
+    """
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return content
+    lines = content.splitlines(keepends=True)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = getattr(node, "body", [])
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(getattr(body[0], "value", None), ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                start = body[0].lineno - 1
+                end = body[0].end_lineno or body[0].lineno
+                for i in range(start, min(end, len(lines))):
+                    lines[i] = "\n" if lines[i].endswith("\n") else ""
+    return "".join(lines)
+
+
 class SecurityScorer:
     """
     Security dimension scoring engine.
@@ -239,16 +276,20 @@ class SecurityScorer:
             
     def _get_script_content(self, script_path: Path) -> Optional[str]:
         """
-        Safely read script content.
-        
+        Safely read script content, with docstrings blanked.
+
+        Docstrings are documentation: a scanner that lists the patterns it
+        detects (or a module explaining `os.system` risks) must not flag its
+        own prose. Line numbers are preserved so findings stay accurate.
+
         Args:
             script_path: Path to the Python script
-            
+
         Returns:
             Script content as string, or None if read fails
         """
         try:
-            return script_path.read_text(encoding='utf-8')
+            return _blank_docstrings(script_path.read_text(encoding='utf-8'))
         except Exception as e:
             self._log_verbose(f"Failed to read {script_path}: {e}")
             return None

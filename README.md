@@ -30,7 +30,7 @@ Claude reads this skill's instructions, picks the right validator, runs it, and 
 The repo is itself a valid skill, so it inspects its own hull. Genuine output on a fresh clone:
 
 ```text
-=== skill-doctor  [tool] ===
+=== skill-doctor  [tool] · ~2.0k tokens (description 115 every session + body 1.9k on trigger) ===
   · INFO    DEEP_NESTING: assets/sample-skill/references/api-reference.md is nested 3 levels deep.
               → Keep reference files shallow so they are easy to discover.
   · INFO    GIT_DIR: A .git directory is present (normal for a cloned skill).
@@ -38,7 +38,7 @@ The repo is itself a valid skill, so it inspects its own hull. Genuine output on
   CONFORMANT  (0 errors, 0 warnings, 2 notes)
 ```
 
-It even notices its own `.git` directory and tells you how to keep it out of your upload. A doctor who skips his own checkup can't be trusted with yours.
+The header states what the skill costs you in context — description tokens load every session, body tokens on trigger — and it even notices its own `.git` directory and tells you how to keep it out of your upload. A doctor who skips his own checkup can't be trusted with yours.
 
 ## How it works
 
@@ -46,15 +46,27 @@ Your skill passes through five independent inspections:
 
 ```mermaid
 flowchart LR
-    skill[/"your-skill/"/] --> spec["spec_validator<br/>loads, uploads, triggers?"]
-    spec --> house["skill_validator<br/>house structure and docs"]
-    house --> tester["script_tester<br/>do bundled scripts run?"]
-    tester --> quality["quality_scorer<br/>4-dimension score"]
-    quality --> security["security_scorer<br/>risk posture"]
-    security --> verdict{{"Verdict<br/>CONFORMANT + grade A+ to F"}}
+    skill[/"⚓ your-skill/"/] --> spec
+    subgraph SPEC["The spec — binding"]
+        spec["spec_validator<br/>loads? uploads? triggers?<br/>reports ~token cost per skill"]
+    end
+    subgraph HOUSE["House standard — advisory"]
+        direction LR
+        house["skill_validator<br/>structure & docs"] --> tester["script_tester<br/>every bundled script,<br/>recursively"]
+        tester --> quality["quality_scorer<br/>5-dimension score"]
+        quality --> security["security_scorer<br/>risk posture"]
+    end
+    spec --> house
+    security --> verdict{{"🩺 Verdict<br/>CONFORMANT or not<br/>grade A+ to F · ~tokens"}}
+    classDef specStyle fill:#f59e0b,stroke:#b45309,color:#1f2937
+    classDef houseStyle fill:#3b82f6,stroke:#1d4ed8,color:#ffffff
+    classDef verdictStyle fill:#22c55e,stroke:#15803d,color:#1f2937
+    class spec specStyle
+    class house,tester,quality,security houseStyle
+    class verdict verdictStyle
 ```
 
-`scripts/spec_validator.py` rules on the letter of the Agent Skills spec — the rules that decide whether a skill actually loads, uploads, and triggers. The other four grade house-standard quality: structure and docs, script execution, a four-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins** — skill-doctor never asks you to pad a concise skill to satisfy someone's style guide.
+The amber gate is binding: `scripts/spec_validator.py` rules on the letter of the Agent Skills spec — the rules that decide whether a skill actually loads, uploads, and triggers — and reports each skill's estimated context cost (description tokens load every session; body tokens load on trigger, the way Claude Code's own doctor counts them). The blue chain is advisory: structure and docs, script execution (recursive — nested `scripts/` packages included), a five-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins** — skill-doctor never asks you to pad a concise skill to satisfy someone's style guide.
 
 ## Why skill-doctor, and not another "skill-tester"?
 
@@ -71,7 +83,7 @@ from loading, uploading, or triggering. The differences are substance, not brand
 - **Skill-type aware.** Skills are classified first (`documentation`, `tool`, `toolkit`,
   `router`) so script-oriented rules are never misapplied to skills that legitimately
   contain no scripts.
-- **Adversarially tested.** `python3 -m pytest tests/ -q` runs 95 checks, including
+- **Adversarially tested.** `python3 -m pytest tests/ -q` runs 117 checks, including
   fixtures that construct deliberately broken skills and assert every defect is caught.
   A validator that is not itself tested is folklore.
 - **Security posture scoring.** `scripts/security_scorer.py` is a dimension the
@@ -79,6 +91,63 @@ from loading, uploading, or triggering. The differences are substance, not brand
 - **Honest about the competition.** [references/validator-comparison.md](references/validator-comparison.md)
   documents how this tool compares to `skills-ref`, `agent-ecosystem/skill-validator`,
   and `agent-skills-lint` — *including where those tools are ahead*.
+
+## Field results: a 20-skill audit
+
+All five validators were run over a private corpus of 20 real, in-use skills (145 Python
+scripts, ~45k script LOC), anonymized as `Sk2`–`Sk20` and ranked by quality score — rank 1
+is skill-doctor auditing itself. Corpus verdict: **19/20 spec-conformant** (the one error: a
+SKILL.md body at ~8.2k tokens against the ~5k budget), **0 verified security
+vulnerabilities**, 145/145 scripts syntax-valid. The doctor's setup classification:
+**11 good, 4 need work, 5 bad.**
+
+### Top 10 by quality score
+
+| # | Skill | Type | Spec | Structure | Quality | Grade | Security | ~Tokens | Setup verdict |
+|--:|---|---|:---:|--:|--:|:--:|--:|--:|---|
+| 1 | skill-doctor (this tool) | tool | pass | 84.8 | 83.0 | B+ | 78.0 | 2.0k | good |
+| 2 | Sk2 | router | pass | 92.2 | 66.2 | C+ | 81.7 | 2.7k | good |
+| 3 | Sk3 | tool | pass | 80.6 | 65.0 | C | 87.0 | 1.0k | good |
+| 4 | Sk4 | router | pass | 71.5 | 63.3 | C | 79.7 | 2.0k | good |
+| 5 | Sk5 | tool | pass | 88.2 | 62.2 | C | 86.0 | 3.3k | good |
+| 6 | Sk6 | tool | pass | 84.6 | 62.2 | C | 86.0 | 3.3k | good |
+| 7 | Sk9 | tool | pass | 84.1 | 60.9 | C | 80.7 | 1.1k | good |
+| 8 | Sk7 | router | pass | 82.4 | 60.6 | C | 80.9 | 2.8k | good |
+| 9 | Sk8 | router | pass | 67.9 | 57.3 | C- | 78.0 | 2.2k | good |
+| 10 | Sk13 | tool | pass | 58.8 | 56.0 | C- | 80.5 | 2.2k | needs work |
+
+```mermaid
+xychart-beta
+    title "Top 10 — quality score (bar) vs house structure score (line)"
+    x-axis ["doctor", "Sk2", "Sk3", "Sk4", "Sk5", "Sk6", "Sk9", "Sk7", "Sk8", "Sk13"]
+    y-axis "Score (0-100)" 0 --> 100
+    bar [83.0, 66.2, 65.0, 63.3, 62.2, 62.2, 60.9, 60.6, 57.3, 56.0]
+    line [84.8, 92.2, 80.6, 71.5, 88.2, 84.6, 84.1, 82.4, 67.9, 58.8]
+```
+
+What the audit says about skills in the wild:
+
+- **Documentation is the weakest dimension** — 14 of the 20 skills ship no README at all.
+- **Context cost varies 17×** across the corpus (~0.5k to ~8.3k tokens per skill), which is
+  why the doctor now prints each skill's token cost in its report header.
+- **Most script "failures" are conventions, not broken code** — bundled library modules and
+  copy-adapt training templates being held to CLI standards. Syntax validity was 100%.
+
+### The best bugs it found were its own
+
+Running the harness at scale and reading every finding surfaced 13 defects in the harness
+itself — the audit's most valuable output. The critical ones, all fixed in this release
+with regression tests:
+
+| Defect | Impact before the fix |
+|---|---|
+| `script_tester` globbed only top-level `scripts/*.py` | 71% of the corpus's scripts were silently never tested |
+| Unanchored `eval\s*\(` and credential regexes matched method names and help text | 4 healthy skills capped at 30/100 as "critical" — would fail any CI gate |
+| `basic_execution` accepted exit-1 tracebacks as passes | a crashing script literally could not fail the check |
+| Docstrings were scanned as code | the security scanner flagged its own documentation |
+
+A validator that audits itself honestly is the whole point. The test suite now runs 117
+adversarial checks, including a regression test for every false-positive class above.
 
 ## Beyond Claude Code: claude.ai, Desktop, API
 
@@ -181,7 +250,7 @@ python3 ~/.claude/skills/skill-doctor/scripts/spec_validator.py path/to/your-ski
 - **`scripts/`** — the five validators (all stdlib-only): `spec_validator.py`, `skill_validator.py`, `script_tester.py`, `quality_scorer.py`, `security_scorer.py`.
 - **`references/`** — the standards the tools implement: [agent-skills-spec.md](references/agent-skills-spec.md), [skill-structure-specification.md](references/skill-structure-specification.md), [tier-requirements-matrix.md](references/tier-requirements-matrix.md), [quality-scoring-rubric.md](references/quality-scoring-rubric.md), [validator-comparison.md](references/validator-comparison.md).
 - **`assets/sample-skill/`** — a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
-- **`tests/`** — 95 adversarial checks on the validators themselves.
+- **`tests/`** — 117 adversarial checks on the validators themselves.
 
 ## Contributing
 
@@ -189,7 +258,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): how to run the tests, and the ship's two
 
 ## License
 
-[MIT](LICENSE) — copyright (c) 2026 MrPirate.
+[MIT License](https://github.com/Gol-D-Al/skill-doctor/blob/main/LICENSE) — copyright (c) 2026 MrPirate. Full text in [`LICENSE`](LICENSE) at the repo root.
 
 ## 🏴‍☠️ Join the crew
 

@@ -849,5 +849,77 @@ if __name__ == "__main__":
             self.assertLess(score, MAX_COMPONENT_SCORE)
 
 
+class TestFieldAuditFalsePositives(unittest.TestCase):
+    """Regression tests for the 2026-08 field audit: every 'critical' finding
+    across a 20-skill corpus was one of these false positives."""
+
+    def _score(self, content: str):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            script = tmp / "script.py"
+            script.write_text(content)
+            return SecurityScorer([script]).get_overall_score()
+        finally:
+            import shutil
+            shutil.rmtree(tmp)
+
+    # -- eval/exec substring anchoring ------------------------------------
+
+    def test_method_names_containing_eval_are_not_eval(self):
+        self.assertIsNone(PATTERN_EVAL.search("x = self._recommend_retrieval(req, scale)"))
+        self.assertIsNone(PATTERN_EVAL.search("results = run_eval(config)"))
+
+    def test_real_eval_is_still_detected(self):
+        self.assertIsNotNone(PATTERN_EVAL.search("value = eval(user_input)"))
+        self.assertIsNotNone(PATTERN_EVAL.search("return    eval (expr)"))
+
+    # -- credential assignments must be statements, not string contents ----
+
+    def test_placeholder_in_help_text_is_not_a_credential(self):
+        result = self._score(
+            'def usage():\n'
+            '    print("  export OPENROUTER_API_KEY=\'your_api_key\'")\n'
+        )
+        self.assertFalse(result["has_critical_vulnerabilities"])
+
+    def test_real_hardcoded_api_key_is_still_critical(self):
+        result = self._score('api_key = "sk-abcdef1234567890"\n')
+        self.assertTrue(result["has_critical_vulnerabilities"])
+
+    def test_attribute_assignment_is_still_detected(self):
+        self.assertIsNotNone(PATTERN_HARDCODED_API_KEY.search(
+            '        self.api_key = "sk-abcdef1234567890"'))
+
+    # -- docstrings are documentation, not vulnerabilities ------------------
+
+    def test_docstring_describing_os_system_is_not_flagged(self):
+        result = self._score(
+            '"""Detects dangerous patterns:\n'
+            '- os.system() usage\n'
+            '- eval(), exec() usage\n'
+            '"""\n'
+            'SAFE = True\n'
+        )
+        self.assertFalse(result["has_critical_vulnerabilities"])
+
+    def test_real_os_system_is_still_flagged(self):
+        result = self._score('import os\nos.system("rm -rf /tmp/x")\n')
+        self.assertTrue(result["has_critical_vulnerabilities"])
+
+    # -- multiline-string detector needs a key/value shape ------------------
+
+    def test_prose_mentioning_token_is_not_a_secret(self):
+        result = self._score(
+            'HELP = """This tool never stores your token.\n'
+            'Pass credentials via environment variables."""\n'
+        )
+        self.assertFalse(result["has_critical_vulnerabilities"])
+
+    def test_quote_cluster_is_not_a_delimiter(self):
+        content = "value = raw.strip('\"').strip(\"'\")\n"
+        from security_scorer import PATTERN_MULTILINE_STRING
+        self.assertIsNone(PATTERN_MULTILINE_STRING.search(content))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

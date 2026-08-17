@@ -306,5 +306,65 @@ class SpecValidatorTestCase(unittest.TestCase):
         self.assertTrue(res.conformant, "warnings alone must not fail conformance")
 
 
+class TestFallbackFrontmatterParser(unittest.TestCase):
+    """The fallback parser (no PyYAML) flattened nested mappings to strings,
+    firing METADATA_NOT_MAPPING on 7 valid skills in the 2026-08 field audit."""
+
+    def _parse_without_yaml(self, fm_text):
+        import unittest.mock as mock
+        from spec_validator import parse_frontmatter
+        with mock.patch.dict(sys.modules, {"yaml": None}):
+            return parse_frontmatter(fm_text)
+
+    def test_nested_metadata_mapping_survives_fallback(self):
+        fm = self._parse_without_yaml(
+            "name: sample-skill\n"
+            "description: Does things.\n"
+            "metadata:\n"
+            "  version: \"2.1\"\n"
+            "  author: someone\n"
+        )
+        self.assertIsInstance(fm.get("metadata"), dict)
+        self.assertEqual(fm["metadata"]["version"], "2.1")
+        self.assertEqual(fm["metadata"]["author"], "someone")
+
+    def test_block_scalar_still_parses_as_string(self):
+        fm = self._parse_without_yaml(
+            "name: sample-skill\n"
+            "description: |\n"
+            "  line one: with a colon\n"
+            "  line two\n"
+        )
+        self.assertIsInstance(fm.get("description"), str)
+        self.assertIn("line one", fm["description"])
+
+
+class TestTokenAccounting(unittest.TestCase):
+    """Per-skill context cost, like Claude Code's doctor reports it."""
+
+    def setUp(self):
+        import tempfile as _tf
+        self.tmp = Path(_tf.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp)
+
+    def test_validate_reports_token_estimate(self):
+        from spec_validator import validate, est_tokens
+        root = build(self.tmp, "sample-skill", GOOD_FM)
+        res = validate(root)
+        self.assertIn("total", res.tokens)
+        self.assertEqual(res.tokens["total"],
+                         res.tokens["description"] + res.tokens["body"])
+        self.assertGreater(res.tokens["body"], 0)
+
+    def test_render_shows_token_cost_in_header(self):
+        from spec_validator import validate, render
+        root = build(self.tmp, "sample-skill", GOOD_FM)
+        out = render(validate(root), strict=False)
+        self.assertIn("tokens", out.splitlines()[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

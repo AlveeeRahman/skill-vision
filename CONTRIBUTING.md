@@ -12,7 +12,7 @@ pip install pytest
 python3 -m pytest tests -q
 ```
 
-All 95 tests must pass on Python 3.9 through 3.13 (CI runs the full matrix on every
+All 117 tests must pass on Python 3.9 through 3.13 (CI runs the full matrix on every
 push and pull request).
 
 ## Two hard rules

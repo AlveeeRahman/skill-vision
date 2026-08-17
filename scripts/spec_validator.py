@@ -88,6 +88,10 @@ class Result:
     skill: str
     skill_type: str = "unknown"
     findings: list = field(default_factory=list)
+    # Estimated context cost, ~4 chars/token: `description` loads into every
+    # session; `body` loads when the skill triggers (how Claude Code's own
+    # doctor reports per-skill cost).
+    tokens: dict = field(default_factory=dict)
 
     def add(self, severity: str, code: str, message: str, fix: str = "") -> None:
         self.findings.append(Finding(severity, code, message, fix))
@@ -126,7 +130,22 @@ def parse_frontmatter(fm_text: str) -> dict:
     except Exception:
         pass
 
-    data, current, buffer = {}, None, []
+    def flush(key, buffer, block_scalar):
+        """A key with no inline value gathers indented lines. If they all look
+        like `sub: value` pairs (and no block scalar was requested), the spec
+        meant a nested mapping — flattening it to a string made valid
+        `metadata:` blocks fail the mapping check on machines without PyYAML."""
+        items = [b for b in buffer if b]
+        if (not block_scalar and items
+                and all(re.match(r"^[^\s:#][^:]*:", b) for b in items)):
+            sub = {}
+            for b in items:
+                k, _, v = b.partition(":")
+                sub[k.strip()] = v.strip().strip('"').strip("'")
+            return sub
+        return " ".join(items).strip()
+
+    data, current, buffer, block = {}, None, [], False
     for raw in fm_text.splitlines():
         if raw.strip().startswith("#") or not raw.strip():
             if current and buffer:
@@ -137,18 +156,18 @@ def parse_frontmatter(fm_text: str) -> dict:
                 buffer.append(raw.strip())
             continue
         if current is not None:
-            data[current] = " ".join(b for b in buffer if b).strip()
-            current, buffer = None, []
+            data[current] = flush(current, buffer, block)
+            current, buffer, block = None, [], False
         if ":" not in raw:
             continue
         key, _, value = raw.partition(":")
         key, value = key.strip(), value.strip()
         if value in ("|", ">", "|-", ">-", ""):
-            current, buffer = key, []
+            current, buffer, block = key, [], value != ""
         else:
             data[key] = value.strip('"').strip("'")
     if current is not None:
-        data[current] = " ".join(b for b in buffer if b).strip()
+        data[current] = flush(current, buffer, block)
     return data
 
 
@@ -617,6 +636,14 @@ def validate(root: Path) -> Result:
         res.add("error", "EMPTY_FRONTMATTER", "Frontmatter parsed as empty.")
         return res
 
+    desc_tokens = est_tokens(str(fm.get("description", "")))
+    body_tokens = est_tokens(body)
+    res.tokens = {
+        "description": desc_tokens,   # loaded every session
+        "body": body_tokens,          # loaded when the skill triggers
+        "total": desc_tokens + body_tokens,
+    }
+
     check_yaml_portability(fm_text, res)
     check_name(fm, root, res)
     check_description(fm, res)
@@ -629,8 +656,17 @@ def validate(root: Path) -> Result:
     return res
 
 
+def _fmt_tokens(n: int) -> str:
+    return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
+
+
 def render(res: Result, strict: bool) -> str:
-    out = [f"=== {res.skill}  [{res.skill_type}] ==="]
+    header = f"=== {res.skill}  [{res.skill_type}]"
+    if res.tokens:
+        header += (f" · ~{_fmt_tokens(res.tokens['total'])} tokens"
+                   f" (description {_fmt_tokens(res.tokens['description'])}"
+                   f" every session + body {_fmt_tokens(res.tokens['body'])} on trigger)")
+    out = [header + " ==="]
     if not res.findings:
         out.append("  conformant — no findings")
     for sev in ("error", "warning", "info"):

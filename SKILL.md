@@ -52,13 +52,16 @@ triggers: name charset and directory match, the 1024-character description limit
 500-character compatibility limit, unknown frontmatter keys, nested `SKILL.md` files,
 dangling and escaping file references, orphaned bundled files, and the 500-line body
 ceiling. It classifies the skill first (`documentation`, `tool`, `toolkit`, `router`) so
-script rules are not applied to skills that legitimately have no scripts.
+script rules are not applied to skills that legitimately have no scripts. Its report
+header also states the skill's estimated context cost in tokens — description tokens
+load every session, body tokens load when the skill triggers — so heavy skills are
+visible at a glance (`--json` exposes the same numbers under `tokens`).
 
 How this compares to `skills-ref`, `agent-ecosystem/skill-validator` and
 `agent-skills-lint` — including where those tools are ahead — is in
 [references/validator-comparison.md](references/validator-comparison.md).
 
-Both scripts are covered by tests: `python3 -m pytest tests/ -q` runs 95 checks,
+Both scripts are covered by tests: `python3 -m pytest tests/ -q` runs 117 checks,
 including adversarial fixtures that build deliberately broken skills and assert each
 defect is caught.
 
