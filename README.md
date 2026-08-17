@@ -1,6 +1,6 @@
 # Skill Vision — the QA skill for Claude skills
 
-[![CI](https://github.com/Gol-D-Al/skill-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/Gol-D-Al/skill-vision/actions/workflows/ci.yml)
+[![CI](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![Zero runtime dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#%EF%B8%8F-under-the-hood-the-five-validators)
@@ -11,10 +11,10 @@
 
 ```bash
 # All your projects (personal skill):
-git clone https://github.com/Gol-D-Al/skill-vision.git ~/.claude/skills/skill-vision
+git clone https://github.com/AlveeeRahman/skill-vision.git ~/.claude/skills/skill-vision
 
 # Or one project only (project skill — ships to your team through git):
-git clone https://github.com/Gol-D-Al/skill-vision.git .claude/skills/skill-vision
+git clone https://github.com/AlveeeRahman/skill-vision.git .claude/skills/skill-vision
 ```
 
 That's the whole install — no packages, no venv (any Python 3.9+). Then ask Claude, in your own words:
@@ -216,7 +216,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Get skill-vision
-        run: git clone --depth 1 https://github.com/Gol-D-Al/skill-vision.git /tmp/skill-vision
+        run: git clone --depth 1 https://github.com/AlveeeRahman/skill-vision.git /tmp/skill-vision
       - name: Validate all skills
         run: |
           python /tmp/skill-vision/scripts/spec_validator.py skills --recursive
@@ -251,7 +251,7 @@ one before it takes over:
 
 ```bash
 # 1. Keep the incumbent around
-git clone https://github.com/Gol-D-Al/skill-vision.git /tmp/incumbent
+git clone https://github.com/AlveeeRahman/skill-vision.git /tmp/incumbent
 
 # 2. Make your improvements in your working copy,
 #    then let the incumbent judge the candidate…
@@ -269,7 +269,7 @@ is the highest honor this repo awards: document it, and it joins the defect tabl
 
 **Brag with numbers.** Ran skill-vision on your own best skill? Post its report header — the
 token line, the `CONFORMANT` verdict, and your quality score — in an
-[issue labeled `checkup`](https://github.com/Gol-D-Al/skill-vision/issues/new?labels=checkup&title=Checkup%3A+my-skill).
+[issue labeled `checkup`](https://github.com/AlveeeRahman/skill-vision/issues/new?labels=checkup&title=Checkup%3A+my-skill).
 The highest verified score earns a permanent shout-out in this README.
 
 ## Contributing
@@ -278,11 +278,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): how to run the tests, and the ship's two
 
 ## License
 
-[MIT License](https://github.com/Gol-D-Al/skill-vision/blob/main/LICENSE) — copyright (c) 2026 MrPirate. Full text in [`LICENSE`](LICENSE) at the repo root.
+[MIT License](https://github.com/AlveeeRahman/skill-vision/blob/main/LICENSE) — copyright (c) 2026 MrPirate. Full text in [`LICENSE`](LICENSE) at the repo root.
 
 ## 🏴‍☠️ Join the crew
 
 - **⭐ Star the repo** if skill-vision kept a broken skill from shipping — it helps other skill authors find it.
-- **Found a loose plank?** [Open an issue](https://github.com/Gol-D-Al/skill-vision/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
+- **Found a loose plank?** [Open an issue](https://github.com/AlveeeRahman/skill-vision/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
 
 *Fair winds, and may your skills always load on the first try.*

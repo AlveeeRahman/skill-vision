@@ -16,7 +16,7 @@
 ## Reporting a vulnerability
 
 Report suspected vulnerabilities by opening a
-[GitHub issue](https://github.com/Gol-D-Al/skill-vision/issues) on this repository.
+[GitHub issue](https://github.com/AlveeeRahman/skill-vision/issues) on this repository.
 Since this tool runs entirely locally and holds no user data, public reporting is
 acceptable; include the affected script, a reproduction, and the impact you see.
 
