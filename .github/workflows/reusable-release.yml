@@ -1,0 +1,89 @@
+name: Reusable Release
+
+# Called by this repo and by sibling skill repos (research-hound, agent-oracle) via
+# `uses: AlveeeRahman/skill-vision/.github/workflows/reusable-release.yml@<sha>`.
+# Builds the skill zip exactly as each repo's own README documents, then tests the
+# *packaged artifact itself* the way an installing user actually would: extract it into
+# a clean directory, validate it, and run its scripts for real. A source tree passing
+# spec_validator.py doesn't prove the thing someone unzips and drops into
+# ~/.claude/skills/ works — only extracting and running the zip proves that. Only then
+# does it get attached to a GitHub Release, with build provenance attested.
+
+on:
+  workflow_call:
+    inputs:
+      skill_name:
+        description: "Directory name the skill zips as (matches the repo name)."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the tagged commit
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          path: ${{ inputs.skill_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Get skill-vision (the QA skill)
+        run: git clone --depth 1 https://github.com/AlveeeRahman/skill-vision.git /tmp/skill-vision
+
+      - name: Self-validate the source tree against the Agent Skills spec
+        run: python /tmp/skill-vision/scripts/spec_validator.py ${{ inputs.skill_name }}
+
+      - name: Build the release zip
+        run: |
+          zip -r "${{ inputs.skill_name }}.zip" "${{ inputs.skill_name }}" \
+            -x "${{ inputs.skill_name }}/.git/*" "${{ inputs.skill_name }}/.git"
+
+      - name: Extract the zip into a clean directory, exactly as an install would
+        run: |
+          mkdir -p installed-check
+          unzip -q "${{ inputs.skill_name }}.zip" -d installed-check
+          test -f "installed-check/${{ inputs.skill_name }}/SKILL.md" \
+            || (echo "::error::extracted zip has no SKILL.md at its root; install would fail" && exit 1)
+
+      - name: Validate the extracted artifact, not just the source
+        run: python /tmp/skill-vision/scripts/spec_validator.py "installed-check/${{ inputs.skill_name }}"
+
+      - name: Run the extracted artifact's own scripts, the way an install would
+        run: |
+          if [ -d "installed-check/${{ inputs.skill_name }}/scripts" ]; then
+            python /tmp/skill-vision/scripts/script_tester.py "installed-check/${{ inputs.skill_name }}"
+            code=$?
+            # Exit 0 = all pass, 2 = partial (e.g. missing expected_outputs fixtures --
+            # a known, accepted baseline across these repos today, not real breakage).
+            # Exit 1 is the only outcome that means a script actually crashed; block on it.
+            if [ "$code" -eq 1 ]; then
+              echo "::error::a bundled script crashed on the extracted artifact; blocking release"
+              exit 1
+            fi
+          else
+            echo "No scripts/ directory in this skill; nothing to execute."
+          fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: "${{ inputs.skill_name }}.zip"
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: "${{ inputs.skill_name }}.zip"
+          generate_release_notes: true
