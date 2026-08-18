@@ -1,21 +1,62 @@
 ---
 name: skill-vision
 description: "Validate, test, and score the quality of Agent Skills for Claude Code and claude.ai. Comprehensive meta-skill: structure validation, Python script testing (syntax + imports + runtime + output format), multi-dimensional quality scoring with letter grades and tier classification (BASIC/STANDARD/POWERFUL). Use when authoring a new skill, auditing existing skills for tier promotion, setting up pre-commit hooks for skill quality, or integrating skill QA into CI."
+metadata:
+  version: "1.1.1"
 ---
 
 # Skill Vision
 
 *Boards your Agent Skills and inspects every plank before they sail — validation, script testing, and quality scoring.*
 
-**Tier**: POWERFUL · **Category**: Engineering Quality Assurance · **Dependencies**: None (Python stdlib only)
+**Category**: Engineering Quality Assurance · **Dependencies**: None (Python stdlib only)
 
-Meta-skill that validates, tests, and scores skills in this repository. Five tools, run from the **repo root** with full paths:
+Meta-skill that validates, tests, and scores skills in this repository. Tier is computed,
+not asserted: run `quality_scorer.py` and read `tier_recommendation`. Six tools, run from
+the **repo root** with full paths:
 
-1. **`scripts/skill_validator.py`** — structure + documentation compliance
-2. **`scripts/script_tester.py`** — Python script syntax/imports/runtime/output testing
-3. **`scripts/quality_scorer.py`** — multi-dimensional scoring with letter grade
-4. **`scripts/security_scorer.py`** — security posture scoring (also available via `quality_scorer.py --include-security`)
-5. **`scripts/skill_mapper.py`** — draws the skill's files and reference graph as a Mermaid flowchart
+1. **`scripts/spec_validator.py`** — the Agent Skills spec: does it load, upload, trigger?
+2. **`scripts/claim_auditor.py`** — does the documentation tell the truth about the code?
+3. **`scripts/skill_validator.py`** — structure + documentation compliance
+4. **`scripts/script_tester.py`** — Python script syntax/imports/runtime/output testing
+5. **`scripts/quality_scorer.py`** — multi-dimensional scoring with letter grade
+6. **`scripts/security_scorer.py`** — security posture scoring (also available via `quality_scorer.py --include-security`)
+7. **`scripts/skill_mapper.py`** — draws the skill's files and reference graph as a Mermaid flowchart
+
+## Is it true, not just well-formed?
+
+Every other tool here asks whether a skill is *structured* correctly. `claim_auditor.py`
+asks whether it is *honest*. Those fail independently: a skill can pass every link check,
+score an A, and still tell you in its frontmatter that a script runs offline when that
+script ships your prompt to a third-party API.
+
+```bash
+python3 scripts/claim_auditor.py path/to/skill            # 0 clean · 2 contradicted
+python3 scripts/claim_auditor.py path/to/skill --json
+python3 scripts/claim_auditor.py path/to/skills --recursive
+python3 scripts/claim_auditor.py path/to/skill --strict   # unverifiable claims fail too
+```
+
+It checks five things against the tree, never against a model's opinion: documented
+commands (does the script exist, does argparse define that flag), reach claims
+("offline", "stdlib only", "zero dependencies") **traced transitively through spawned
+subprocesses**, inventory counts, paths named in SKILL.md/README.md, and asserted
+`--help`/`--json` support.
+
+The transitive trace is the point. A wrapper that imports nothing but `subprocess` looks
+stdlib-only, and if it execs a sibling needing `requests` and an API key, it is not
+offline. Judging the wrapper on its own imports is how that claim survives review.
+
+Claims it cannot settle come back as **UNVERIFIED**, not as findings. It is deliberately
+quiet about accurate disclaimers ("X is *not* an offline alternative"), historical notes,
+optional `try/except ImportError` imports, placeholder filenames, and example paths in
+guides. Mark a block quoting another project's commands with
+`<!-- claim-audit: ignore-next-block -->` and it is skipped.
+
+For the judgement-shaped half — stale versions, misattributed citations, unsourced
+numbers, instructions that cannot be followed — `agents/hallucination-hunter.md` is a
+subagent that runs these tools first and investigates only what they could not decide.
+Copy it into `.claude/agents/` to use it.
 
 ## See the codebase, not just the verdict
 
@@ -31,33 +72,26 @@ python3 scripts/skill_mapper.py path/to/your-skill --detail      # + function/cl
 python3 scripts/skill_mapper.py path/to/your-skill --json        # the same graph as data
 ```
 
-The script writes no file. It prints Mermaid to stdout and stops there, so put it in
-a fenced ` ```mermaid ` block in your reply. Claude Code and claude.ai both render that
-inline. Save a file or publish an Artifact only if the user asks for one. Every node
-is a file that exists, and every edge is a reference `spec_validator.py` also
-resolved via `build_graph()`, so the map and the CONFORMANT/NOT CONFORMANT verdict
-can't disagree. Dashed red edges are DANGLING_REFERENCE and PATH_ESCAPES_SKILL,
-drawn as arrows instead of text. Grey dashed nodes are ORPHANED_REFERENCE: bundled,
-but unreachable from SKILL.md.
+The script writes no file. It prints Mermaid to stdout, so put it in a fenced
+` ```mermaid ` block in your reply — Claude Code and claude.ai both render that inline.
+Save a file or publish an Artifact only if the user asks. Every node is a file that
+exists, and every edge is a reference `spec_validator.py` resolved via the same
+`build_graph()`, so the map and the CONFORMANT verdict can't disagree. Dashed red =
+DANGLING_REFERENCE and PATH_ESCAPES_SKILL. Grey dashed = ORPHANED_REFERENCE (bundled,
+unreachable). Amber dashed = REFERENCE_TOO_DEEP (reachable, but more than one hop out).
 
-It does not draw a call graph between functions. The best published static Python
-call-graph tools land around 70% recall, so roughly three edges in ten go missing,
-and a diagram that's quietly incomplete is worse than no diagram at all. Everything
-here is checkable against `ls` and `grep` instead: files, links, and, with
-`--detail`, counts read straight off each script's AST.
+It does not draw a call graph between functions: the best published static Python
+call-graph tools land around 70% recall, and a diagram that is quietly incomplete is
+worse than none. Everything here is checkable against `ls` and `grep`.
 
 > **Scope note:** this skill's tier line-count minimums measure *legacy* skills. For authoring *new* skills, `engineering/write-a-skill` (SKILL.md under ~100 lines, Matt Pocock doctrine) is the binding standard — do not pad a new skill to satisfy a tier minimum here.
 
 ## Quick Start (exact, runnable from repo root)
 
 ```bash
-# 1. Validate structure (exit non-zero on failure — usable as a gate)
-python3 scripts/skill_validator.py path/to/your-skill --json
-
-# 2. Test the skill's Python scripts (30s default timeout per script)
-python3 scripts/script_tester.py path/to/your-skill --json
-
-# 3. Score quality (fail CI below threshold with --minimum-score)
+python3 scripts/spec_validator.py path/to/your-skill              # does it load?
+python3 scripts/claim_auditor.py  path/to/your-skill              # is it true?
+python3 scripts/script_tester.py  path/to/your-skill --json       # do the scripts run?
 python3 scripts/quality_scorer.py path/to/your-skill --json --detailed --minimum-score 75
 ```
 
@@ -91,10 +125,19 @@ How this compares to `skills-ref`, `agent-ecosystem/skill-validator` and
 `agent-skills-lint` — including where those tools are ahead — is in
 [references/validator-comparison.md](references/validator-comparison.md).
 
-All three scripts are covered by tests: `python3 -m pytest tests/ -q` runs 131 checks,
+`spec_validator.py` also reports **REFERENCE_TOO_DEEP**: a reference file more than one
+link hop from SKILL.md. Anthropic's authoring guidance is explicit — *"Keep references one
+level deep from SKILL.md"* — because past one hop an agent tends to preview a file with
+`head -100` instead of reading it, so the end is silently never seen. This is **link
+distance, not directory depth**: a file two directories down may be one hop away or six,
+depending only on who links it. `DEEP_NESTING` measures directory depth and is advisory;
+this one maps to a real failure.
+
+The scripts are covered by tests: `python3 -m pytest tests/ -q` runs 193 checks,
 including adversarial fixtures that build deliberately broken skills and assert each
-defect is caught, plus a parity suite asserting `skill_mapper.py` and `spec_validator.py`
-report the same broken and orphaned files off the same graph.
+defect is caught, a parity suite asserting `skill_mapper.py` and `spec_validator.py`
+report the same broken, orphaned and too-deep files off the same graph, and false-positive
+fixtures asserting that correct skills produce no findings.
 
 The authoritative rules and their sources are in
 [references/agent-skills-spec.md](references/agent-skills-spec.md). Scoring rubric detail
@@ -143,7 +186,15 @@ Four dimensions, 25% each: **Documentation** (depth, examples, references), **Co
 | STANDARD | ≥ 200 lines | 1-2 (300-500 LOC) | subcommands, JSON + text output |
 | POWERFUL | ≥ 300 lines | 2-3 (500-800 LOC) | multiple modes, CI integration |
 
-(Advisory for legacy skills; new skills follow write-a-skill — see scope note above.)
+**Read this table as a description of legacy skills, never as a target.** Its thresholds
+measure volume; the spec measures restraint. Padding a SKILL.md to clear a line count, or
+splitting one good script into two, makes a skill worse and raises its tier. Never do
+either. New skills follow write-a-skill — see the scope note above.
+
+The scorers no longer apply a tool's checklist to skills that are not tools:
+`quality_scorer.py` reads the same `documentation`/`tool`/`toolkit`/`router`
+classification `spec_validator.py` uses, so a guidance skill is not told to invent an
+`assets/` directory or expand its scripts.
 
 ## CI Integration
 
@@ -152,9 +203,15 @@ Four dimensions, 25% each: **Documentation** (depth, examples, references), **Co
 - name: "validate-changed-skills"
   run: |
     for skill in $changed_skills; do
-      python3 skill-vision/scripts/skill_validator.py "$skill" --json
-      python3 skill-vision/scripts/script_tester.py "$skill"
+      python3 skill-vision/scripts/spec_validator.py "$skill"
+      python3 skill-vision/scripts/claim_auditor.py "$skill"
       python3 skill-vision/scripts/quality_scorer.py "$skill" --minimum-score 75
+      # script_tester exits 2 for PARTIAL. `|| code=$?` is required: steps run under
+      # `bash -e`, so a bare failing command aborts before any exit-code branch runs.
+      code=0
+      python3 skill-vision/scripts/script_tester.py "$skill" || code=$?
+      [ "$code" -eq 1 ] && exit 1
+      [ "$code" -eq 2 ] && echo "::warning::$skill has PARTIAL scripts"
     done
 ```
 
@@ -162,13 +219,19 @@ Pre-commit hook: run the validator on the staged skill directory and block the c
 
 ## Verification Loop
 
-A skill "passes" when, in one run from repo root:
+A skill "passes" when, in one run from repo root, all four exit 0:
 
-1. `skill_validator.py <skill> --json` exits 0,
-2. `script_tester.py <skill>` reports all scripts passing, and
-3. `quality_scorer.py <skill> --minimum-score <target>` exits 0.
+1. `spec_validator.py <skill>` — it loads, uploads and triggers,
+2. `claim_auditor.py <skill>` — the documentation is not lying about the code,
+3. `script_tester.py <skill>` — exit 0 means *every* script passed every check; exit 2
+   means at least one is PARTIAL, and
+4. `quality_scorer.py <skill> --minimum-score <target>`.
 
-If any step fails, apply the top `improvement_roadmap` item and re-run all three — never report a partial pass.
+Check the exit code, not the summary text. `script_tester.py` exits 2 when any script is
+PARTIAL — a suite of 27 partial scripts and zero passing ones is exit 2, not exit 0.
+
+If any step fails, apply the top `improvement_roadmap` item and re-run all four — never
+report a partial pass.
 
 ## Troubleshooting
 

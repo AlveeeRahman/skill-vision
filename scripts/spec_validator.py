@@ -25,6 +25,7 @@ import argparse
 import json
 import re
 import sys
+from collections import deque
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -411,6 +412,7 @@ class SkillGraph:
     edges: list = field(default_factory=list)        # LinkEdge, in document order
     referenced: set = field(default_factory=set)     # anything a markdown file resolves to
     reachable: set = field(default_factory=set)      # anything walkable from SKILL.md
+    hops: dict = field(default_factory=dict)         # reachable path -> link hops from SKILL.md
     bundled: list = field(default_factory=list)      # files under references/assets/guides
     md_files: list = field(default_factory=list)     # every markdown file, SKILL.md first
 
@@ -485,16 +487,20 @@ def build_graph(root: Path, body: str) -> SkillGraph:
                     break
         return found
 
-    frontier = [root / "SKILL.md"]
+    # Breadth-first, so the recorded hop count is the *shortest* route from SKILL.md.
+    # Depth-first would report whichever path it happened to walk, and a file linked
+    # both directly and via a guide would look deeper than it is.
+    frontier = deque([(root / "SKILL.md", 0)])
     while frontier:
-        cur = frontier.pop()
+        cur, depth = frontier.popleft()
         for rel in paths_in(cur):
             if rel in graph.reachable:
                 continue
             graph.reachable.add(rel)
+            graph.hops[rel] = depth + 1
             nxt = root / rel
             if nxt.suffix.lower() == ".md" and nxt.is_file():
-                frontier.append(nxt)
+                frontier.append((nxt, depth + 1))
 
     graph.bundled = [p.relative_to(root) for d in ("references", "assets", "guides")
                      if (root / d).is_dir()
@@ -544,15 +550,35 @@ def check_links(root: Path, body: str, res: Result) -> None:
                 "Under progressive disclosure an unlinked file is never read. Link it from "
                 "SKILL.md or remove it.")
 
-    # Depth: SKILL.md -> reference -> reference is hard for agents to follow.
+    # Directory depth. Advisory only: it affects how easy a file is to find by hand,
+    # not whether the agent can read it whole. The link-hop check below is the one
+    # that maps to a real failure mode.
     for rel in graph.md_files:
         if rel.name == "SKILL.md":
             continue
         depth = len(rel.parts) - 1
         if depth > 2:
             res.add("info", "DEEP_NESTING",
-                    f"{rel} is nested {depth} levels deep.",
-                    "Keep reference files shallow so they are easy to discover.")
+                    f"{rel} sits {depth} directories deep on disk.",
+                    "Keep reference files shallow so they are easy to discover by hand.")
+
+    # Link hops. This is the rule Anthropic states outright: "Keep references one level
+    # deep from SKILL.md. All reference files should link directly from SKILL.md." Past
+    # one hop the agent tends to preview with head -100 instead of reading the file,
+    # so the tail of a two-hop reference is quietly never read. Directory depth does not
+    # capture this — references/writing/imrad.md is two directories down but may be one
+    # hop away, or six hops, depending only on who links it.
+    too_deep = sorted(
+        (rel for rel, hops in graph.hops.items()
+         if hops > 1 and rel.suffix.lower() == ".md" and str(rel) != "SKILL.md"),
+        key=lambda r: (graph.hops[r], str(r)),
+    )
+    for rel in too_deep:
+        route = graph.hops[rel]
+        res.add("warning", "REFERENCE_TOO_DEEP",
+                f"{rel} is {route} link hops from SKILL.md, not 1.",
+                "Link it directly from SKILL.md. Past one hop agents preview files "
+                "instead of reading them, so the end of the file is never seen.")
 
 
 def check_packaging_hygiene(root: Path, res: Result) -> None:

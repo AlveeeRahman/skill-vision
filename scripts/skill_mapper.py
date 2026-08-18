@@ -164,6 +164,12 @@ def collect(root: Path, detail: bool = False) -> dict:
         node["bundled"] = rel in bundled
         node["stranded"] = (node["bundled"] and not node["reachable"]
                             and rel.lower().endswith(".md"))
+        # Same hop counts spec_validator reports as REFERENCE_TOO_DEEP, off the same
+        # graph, so the picture and the verdict cannot disagree about which files an
+        # agent has to walk two links to reach.
+        node["hops"] = 0 if rel == "SKILL.md" else graph.hops.get(Path(rel))
+        node["too_deep"] = bool(node["hops"] and node["hops"] > 1
+                                and rel.lower().endswith(".md"))
 
     # Python is reached by being run, not by being linked, so a script no markdown
     # mentions is still part of the codebase. Draw every one of them or the map would
@@ -232,6 +238,7 @@ def collect(root: Path, detail: bool = False) -> dict:
             "code_deps": len(code_edges),
             "broken_links": len(missing),
             "stranded": sum(1 for n in nodes.values() if n.get("stranded")),
+            "too_deep": sum(1 for n in nodes.values() if n.get("too_deep")),
         },
     }
 
@@ -319,15 +326,25 @@ def render_mermaid(model: dict, direction: str = "TD",
 
     stranded = [n for n in nodes.values()
                 if n.get("stranded") and n["path"] in shown and n["path"] != "SKILL.md"]
+    # Reachable, but only via another reference. Not broken, so not red; distinct from
+    # orphaned, because the agent can get there — it just tends to skim instead of read.
+    too_deep = [n for n in nodes.values()
+                if n.get("too_deep") and n["path"] in shown
+                and not n.get("stranded") and n["path"] != "SKILL.md"]
 
     out.append("  classDef entry fill:#f59e0b,stroke:#b45309,color:#1f2937")
     out.append("  classDef orphan fill:#e5e7eb,stroke:#9ca3af,color:#6b7280,"
                "stroke-dasharray:4 3")
     out.append("  classDef broken fill:#fecaca,stroke:#dc2626,color:#7f1d1d")
+    out.append("  classDef deep fill:#fef3c7,stroke:#d97706,color:#78350f,"
+               "stroke-dasharray:2 2")
     out.append(f'  class {_node_id("SKILL.md")} entry')
     if stranded:
         out.append("  class " + ",".join(_node_id(n["path"]) for n in stranded)
                    + " orphan")
+    if too_deep:
+        out.append("  class " + ",".join(_node_id(n["path"]) for n in too_deep)
+                   + " deep")
     if model["missing"]:
         out.append("  class " + ",".join(_node_id("missing_%d" % i)
                                          for i in range(len(model["missing"]))) + " broken")
@@ -374,7 +391,8 @@ def main() -> int:
     summary = (f"{counts['files']} files mapped · {counts['links']} resolved links · "
                f"{counts['code_deps']} code dependencies · "
                f"{counts['broken_links']} broken · "
-               f"{counts['stranded']} stranded from SKILL.md")
+               f"{counts['stranded']} stranded from SKILL.md · "
+               f"{counts['too_deep']} more than one hop away")
     print(f"\n{summary}", file=sys.stderr)
     skipped = counts["files_on_disk"] - counts["files"]
     if skipped > 0:

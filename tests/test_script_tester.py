@@ -136,16 +136,37 @@ class TestImportClassification(unittest.TestCase):
 
 
 class TestSuiteAggregation(unittest.TestCase):
-    def test_one_pass_does_not_dilute_failures(self):
+    def _suite(self, *statuses):
         suite = ResultSuite("skill")
-        good = ScriptTestResult("skill/scripts/good.py")
-        good.overall_status = "PASS"
-        bad = ScriptTestResult("skill/scripts/bad.py")
-        bad.overall_status = "FAIL"
-        suite.add_script_result(good)
-        suite.add_script_result(bad)
+        for i, status in enumerate(statuses):
+            r = ScriptTestResult(f"skill/scripts/s{i}.py")
+            r.overall_status = status
+            suite.add_script_result(r)
         suite.calculate_summary()
-        self.assertEqual(suite.summary["overall_status"], "FAIL")
+        return suite.summary
+
+    def test_one_pass_does_not_dilute_failures(self):
+        self.assertEqual(self._suite("PASS", "FAIL")["overall_status"], "FAIL")
+
+    def test_partial_scripts_do_not_report_pass(self):
+        # The defect this pins: research-hound reported 0 passed / 27 partial as
+        # overall PASS with exit 0, because calculate_summary never read `partial`.
+        summary = self._suite(*(["PARTIAL"] * 27))
+        self.assertEqual(summary["passed"], 0)
+        self.assertEqual(summary["partial"], 27)
+        self.assertEqual(summary["overall_status"], "PARTIAL")
+
+    def test_one_partial_downgrades_an_otherwise_clean_suite(self):
+        self.assertEqual(self._suite("PASS", "PASS", "PARTIAL")["overall_status"], "PARTIAL")
+
+    def test_failure_outranks_partial(self):
+        self.assertEqual(self._suite("PARTIAL", "FAIL")["overall_status"], "FAIL")
+
+    def test_all_passing_is_the_only_way_to_pass(self):
+        self.assertEqual(self._suite("PASS", "PASS")["overall_status"], "PASS")
+
+    def test_no_tests_still_downgrades(self):
+        self.assertEqual(self._suite("PASS", "NO_TESTS")["overall_status"], "PARTIAL")
 
 
 if __name__ == "__main__":

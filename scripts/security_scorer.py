@@ -241,6 +241,132 @@ def _blank_docstrings(content: str) -> str:
     return "".join(lines)
 
 
+def _blank_comments(content: str) -> str:
+    """Strip `#` comment text, keeping the `#` and the line count.
+
+    A comment is documentation with the same status as a docstring. The comment
+    explaining what `PATTERN_MULTILINE_STRING` matches necessarily contains a triple
+    quote and the words it detects, and matched itself. Prose about a credential is
+    not a credential.
+
+    Uses tokenize so a `#` inside a string is untouched. On any tokenize failure the
+    content is returned unchanged.
+    """
+    try:
+        import io
+        import tokenize
+        lines = content.splitlines(keepends=True)
+        for tok in tokenize.generate_tokens(io.StringIO(content).readline):
+            if tok.type != tokenize.COMMENT:
+                continue
+            row, col = tok.start[0] - 1, tok.start[1]
+            if row < len(lines):
+                nl = "\n" if lines[row].endswith("\n") else ""
+                lines[row] = lines[row][:col] + "#" + nl
+        return "".join(lines)
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return content
+
+
+def _blank_regex_literals(content: str) -> str:
+    """Blank the contents of string literals passed to `re.compile(...)`.
+
+    A regex pattern is never a credential. Without this, a detector whose own pattern
+    mentions `password|api_key|secret|token` matches its own source — which is what
+    `PATTERN_MULTILINE_STRING` did here, reporting a "multi-line string credential"
+    at its own definition.
+
+    Narrower than `_blank_string_literals`: the credential checks must keep ordinary
+    string contents, because there the string genuinely is the finding. Only the
+    arguments to `re.compile` are removed.
+    """
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return content
+
+    targets = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        is_re_compile = (
+            (isinstance(func, ast.Attribute) and func.attr == "compile"
+             and isinstance(func.value, ast.Name) and func.value.id == "re")
+            or (isinstance(func, ast.Name) and func.id == "compile")
+        )
+        if not is_re_compile:
+            continue
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                targets.append(arg)
+
+    if not targets:
+        return content
+    lines = content.splitlines(keepends=True)
+    for node in sorted(targets, key=lambda n: (n.lineno, -n.end_lineno),
+                       reverse=False):
+        start, end = node.lineno - 1, (node.end_lineno or node.lineno)
+        for i in range(start, min(end, len(lines))):
+            lines[i] = "\n" if lines[i].endswith("\n") else ""
+    return "".join(lines)
+
+
+def _blank_string_literals(content: str) -> str:
+    """Return `content` with the *contents* of every string literal blanked out.
+
+    Docstring blanking is not enough on its own. A scanner, a linter, or any module
+    that defines detection patterns holds the dangerous construct in an ordinary
+    string literal:
+
+        PATTERN_SHELL = r'asyncio\\.create_subprocess_shell\\s*\\('
+
+    That is a pattern, not a call, and reporting it as a finding is a false positive —
+    the exact one this scorer produced against its own source, costing real points and
+    burying the genuine findings under nine that were its own grammar.
+
+    Only apply this to checks that look for *calls* (command injection, path
+    traversal). The credential check must keep string contents, because there the
+    string literal is the finding.
+
+    Quotes are preserved and each literal keeps its line span, so line numbers, and
+    therefore finding locations, are unchanged. On any parse failure the original
+    content is returned untouched.
+    """
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return content
+
+    lines = content.splitlines(keepends=True)
+    spans = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and node.lineno is not None and node.end_lineno is not None):
+            spans.append((node.lineno, node.col_offset,
+                          node.end_lineno, node.end_col_offset))
+
+    # Longest first, so a nested/overlapping span cannot shift an outer one's offsets.
+    for lineno, col, end_lineno, end_col in sorted(
+            spans, key=lambda s: (s[0], -s[2], -s[3])):
+        if lineno == end_lineno:
+            i = lineno - 1
+            if i >= len(lines):
+                continue
+            line = lines[i]
+            if end_col > len(line):
+                continue
+            lines[i] = line[:col] + (" " * (end_col - col)) + line[end_col:]
+        else:
+            # Multi-line literal: blank the interior, keep the line count intact.
+            for i in range(lineno - 1, min(end_lineno, len(lines))):
+                keep_prefix = lines[i][:col] if i == lineno - 1 else ""
+                keep_suffix = lines[i][end_col:] if i == end_lineno - 1 else ""
+                nl = "\n" if lines[i].endswith("\n") else ""
+                lines[i] = keep_prefix + keep_suffix.rstrip("\n") + nl
+    return "".join(lines)
+
+
 class SecurityScorer:
     """
     Security dimension scoring engine.
@@ -289,10 +415,21 @@ class SecurityScorer:
             Script content as string, or None if read fails
         """
         try:
-            return _blank_docstrings(script_path.read_text(encoding='utf-8'))
+            raw = script_path.read_text(encoding='utf-8')
+            return _blank_regex_literals(_blank_comments(_blank_docstrings(raw)))
         except Exception as e:
             self._log_verbose(f"Failed to read {script_path}: {e}")
             return None
+
+    def _get_code_only(self, script_path: Path) -> Optional[str]:
+        """Script content with docstrings *and* string-literal contents blanked.
+
+        Use for checks that look for dangerous **calls**. A construct appearing inside
+        a string is a pattern, an error message, or a doc example — not an invocation.
+        Do not use for the credential check, where the string is the finding.
+        """
+        content = self._get_script_content(script_path)
+        return None if content is None else _blank_string_literals(content)
             
     def _clamp_score(self, score: int) -> int:
         """
@@ -447,7 +584,7 @@ class SecurityScorer:
         ]
         
         for script_path in self.scripts:
-            content = self._get_script_content(script_path)
+            content = self._get_code_only(script_path)
             if content is None:
                 continue
                 
@@ -505,7 +642,7 @@ class SecurityScorer:
         ]
         
         for script_path in self.scripts:
-            content = self._get_script_content(script_path)
+            content = self._get_code_only(script_path)
             if content is None:
                 continue
                 
@@ -617,25 +754,31 @@ class SecurityScorer:
         if command_findings:
             suggestions.append("Avoid shell=True in subprocess, use shlex.quote for shell arguments")
             
-        # Critical vulnerability check - if any critical issues, cap the score
-        critical_patterns = [
+        # Critical vulnerability check - if any critical issues, cap the score.
+        # Two groups, deliberately read from two different views of the source:
+        #   - credential patterns need string contents intact; the literal IS the
+        #     finding, so they run against comment/docstring-blanked source only.
+        #   - call patterns must NOT see string contents, or a detector listing
+        #     "os.system" in a pattern flags itself as calling it.
+        credential_patterns = [
             PATTERN_HARDCODED_PASSWORD, PATTERN_HARDCODED_API_KEY,
-            PATTERN_HARDCODED_PRIVATE_KEY, PATTERN_OS_SYSTEM,
-            PATTERN_EVAL, PATTERN_EXEC
+            PATTERN_HARDCODED_PRIVATE_KEY,
         ]
-        
+        call_patterns = [PATTERN_OS_SYSTEM, PATTERN_EVAL, PATTERN_EXEC]
+
         has_critical = False
         for script_path in self.scripts:
-            content = self._get_script_content(script_path)
-            if content is None:
-                continue
-            for pattern in critical_patterns:
-                if pattern.search(content):
-                    has_critical = True
-                    break
-            if has_critical:
+            documented = self._get_script_content(script_path)
+            if documented is not None and any(p.search(documented)
+                                              for p in credential_patterns):
+                has_critical = True
                 break
-                
+            code = self._get_code_only(script_path)
+            if code is not None and any(p.search(code) for p in call_patterns):
+                has_critical = True
+                break
+
+
         if has_critical:
             overall_score = min(overall_score, 30)  # Cap at 30 if critical vulnerabilities exist
             

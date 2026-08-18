@@ -1,5 +1,18 @@
 # Quality Scoring Rubric
 
+## Contents
+
+- [Overview](#overview)
+- [Scoring Framework](#scoring-framework)
+- [Documentation Quality (20% Weight)](#documentation-quality-20-weight)
+- [Code Quality (20% Weight)](#code-quality-20-weight)
+- [Completeness (20% Weight)](#completeness-20-weight)
+- [Usability (20% Weight)](#usability-20-weight)
+- [Scoring Calculations](#scoring-calculations)
+- [Quality Improvement Recommendations](#quality-improvement-recommendations)
+- [Security (Optional, 20% Weight when enabled)](#security-optional-20-weight-when-enabled)
+- [Quality Assurance Process](#quality-assurance-process)
+
 **Version**: 2.0.0  
 **Last Updated**: 2026-03-27  
 **Authority**: Claude Skills Engineering Team  
@@ -404,7 +417,7 @@ The Security dimension evaluates Python scripts for security vulnerabilities and
 
 **Important**: By default, the quality scorer uses 4 dimensions × 25% weights for backward compatibility. To include Security assessment, use:
 ```bash
-python quality_scorer.py <skill_path> --include-security
+python3 scripts/quality_scorer.py <skill_path> --include-security
 ```
 
 When Security is enabled, all dimensions are rebalanced to 20% each (5 dimensions × 20% = 100%).

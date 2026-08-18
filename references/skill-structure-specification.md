@@ -1,5 +1,18 @@
 # Skill Structure Specification
 
+## Contents
+
+- [Overview](#overview)
+- [Directory Structure](#directory-structure)
+- [File Requirements](#file-requirements)
+- [Naming Conventions](#naming-conventions)
+- [Quality Standards](#quality-standards)
+- [Validation Criteria](#validation-criteria)
+- [Compliance Levels](#compliance-levels)
+- [Migration and Updates](#migration-and-updates)
+- [Tools and Automation](#tools-and-automation)
+- [Examples and Templates](#examples-and-templates)
+
 **Version**: 1.0.0  
 **Last Updated**: 2026-02-16  
 **Authority**: Claude Skills Engineering Team  

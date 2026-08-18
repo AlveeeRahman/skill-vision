@@ -128,11 +128,13 @@ class TestSuite:
             "no_tests": statuses.count("NO_TESTS")
         }
         
-        # Determine overall status. Any hard failure fails the suite —
-        # passing scripts must never dilute a failure into a softer verdict.
+        # Determine overall status. The verdict is the weakest script's verdict:
+        # a suite is only PASS when every script passed outright. Anything softer
+        # than PASS on any script must surface, or the exit code reports green on
+        # a suite where nothing actually passed.
         if self.summary["failed"] > 0:
             self.summary["overall_status"] = "FAIL"
-        elif self.summary["no_tests"] > 0:
+        elif self.summary["partial"] > 0 or self.summary["no_tests"] > 0:
             self.summary["overall_status"] = "PARTIAL"
         else:
             self.summary["overall_status"] = "PASS"
@@ -733,6 +735,13 @@ Test Categories:
   - Help functionality
   - Sample data processing
   - Output format compliance
+
+Exit codes (the suite takes the weakest script's verdict):
+  0  PASS     every script passed every check
+  2  PARTIAL  at least one script had a failing check or no runnable tests,
+              and none failed outright
+  1  FAIL     at least one script failed a majority of its checks, or the
+              run itself errored
         """
     )
     

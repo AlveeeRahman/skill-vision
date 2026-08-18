@@ -222,6 +222,49 @@ class SpecValidatorTestCase(unittest.TestCase):
                      body="# Title\n\nSee [docs](https://example.com/scripts/x.py).\n")
         self.assertNotIn("DANGLING_REFERENCE", self.codes(root))
 
+    # --- link hops from SKILL.md ----------------------------------------------------
+
+    def test_two_hop_reference_is_flagged(self):
+        """SKILL.md -> guide -> reference is the shape Anthropic warns about."""
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     body="# Title\n\nSee [guide](guides/a.md).\n",
+                     files={"guides/a.md": "See [detail](references/b.md).\n",
+                            "references/b.md": "# B\n"})
+        res = self.result(root)
+        deep = {f.message for f in res.findings if f.code == "REFERENCE_TOO_DEEP"}
+        self.assertTrue(any("references/b.md" in d for d in deep), deep)
+        self.assertFalse(any("guides/a.md" in d for d in deep), deep)
+
+    def test_one_hop_reference_is_clean(self):
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     body="# Title\n\nSee [guide](guides/a.md) and [detail](references/b.md).\n",
+                     files={"guides/a.md": "See [detail](references/b.md).\n",
+                            "references/b.md": "# B\n"})
+        self.assertNotIn("REFERENCE_TOO_DEEP", self.codes(root))
+
+    def test_shortest_route_wins(self):
+        """A file linked both directly and via a guide is one hop, not two."""
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     body="# Title\n\n[g](guides/a.md) [b](references/b.md)\n",
+                     files={"guides/a.md": "[b](references/b.md)\n",
+                            "references/b.md": "# B\n"})
+        graph = sv.build_graph(root, (root / "SKILL.md").read_text().split("---", 2)[2])
+        self.assertEqual(graph.hops[Path("references/b.md")], 1)
+
+    def test_skill_md_backlink_is_not_too_deep(self):
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     body="# Title\n\nSee [guide](guides/a.md).\n",
+                     files={"guides/a.md": "Back to [SKILL.md](SKILL.md).\n"})
+        self.assertNotIn("REFERENCE_TOO_DEEP", self.codes(root))
+
+    def test_deep_script_is_not_flagged(self):
+        """Scripts are executed, not previewed, so hop depth does not apply."""
+        root = build(self.tmp, "sample-skill", GOOD_FM,
+                     body="# Title\n\nSee [guide](guides/a.md).\n",
+                     files={"guides/a.md": "Run [tool](scripts/t.py).\n",
+                            "scripts/t.py": "import argparse\n"})
+        self.assertNotIn("REFERENCE_TOO_DEEP", self.codes(root))
+
     # --- body ---------------------------------------------------------------------
 
     def test_body_over_line_ceiling(self):

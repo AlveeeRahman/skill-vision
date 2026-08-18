@@ -1,5 +1,11 @@
 # Text Processor API Reference
 
+## Contents
+
+- [Classes](#classes)
+- [Command Line Interface](#command-line-interface)
+- [Error Handling](#error-handling)
+
 ## Classes
 
 ### TextProcessor

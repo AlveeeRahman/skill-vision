@@ -1,5 +1,17 @@
 # Tier Requirements Matrix
 
+## Contents
+
+- [Overview](#overview)
+- [Tier Classification Philosophy](#tier-classification-philosophy)
+- [Requirements Matrix](#requirements-matrix)
+- [Detailed Requirements by Tier](#detailed-requirements-by-tier)
+- [Tier Assessment Criteria](#tier-assessment-criteria)
+- [Implementation Guidelines by Tier](#implementation-guidelines-by-tier)
+- [Quality Scoring by Tier](#quality-scoring-by-tier)
+- [Tier Migration Process](#tier-migration-process)
+- [Compliance Monitoring](#compliance-monitoring)
+
 **Version**: 2.0.0  
 **Last Updated**: 2026-03-27  
 **Authority**: Claude Skills Engineering Team  

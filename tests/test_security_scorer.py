@@ -902,6 +902,61 @@ class TestFieldAuditFalsePositives(unittest.TestCase):
         )
         self.assertFalse(result["has_critical_vulnerabilities"])
 
+    # -- a detector's own grammar is not a vulnerability ---------------------
+    # Before these, scanning skill-vision produced 9 findings, every one of them
+    # this scorer's own pattern literals, comments, and docstrings.
+
+    def test_pattern_literal_naming_a_shell_call_is_not_a_call(self):
+        result = self._score(
+            "import re\n"
+            "PATTERN_SHELL = re.compile(r'asyncio\\.create_subprocess_shell\\s*\\(')\n"
+            "PATTERN_SPAWN = re.compile(r'pexpect\\.spawn\\s*\\(')\n"
+        )
+        self.assertEqual(result["findings"], [])
+
+    def test_string_naming_os_system_is_not_a_critical_call(self):
+        result = self._score('MESSAGE = "never use os.system() here"\n')
+        self.assertFalse(result["has_critical_vulnerabilities"])
+
+    def test_traversal_pattern_definition_is_not_a_traversal(self):
+        result = self._score(
+            "import re\n"
+            "PATTERN_TRAVERSAL = re.compile(r'\\.\\./')\n"
+            "PATTERN_NULL = re.compile(r'%00|\\\\x00')\n"
+        )
+        self.assertEqual(result["findings"], [])
+
+    def test_comment_mentioning_a_credential_is_not_a_credential(self):
+        result = self._score(
+            '# matches password= or api_key= inside a """ block\n'
+            'SAFE = True\n'
+        )
+        self.assertFalse(result["has_critical_vulnerabilities"])
+        self.assertEqual(result["findings"], [])
+
+    def test_credential_regex_definition_does_not_match_itself(self):
+        result = self._score(
+            "import re\n"
+            "P = re.compile(r'(password|api_key|secret|token)\\s*[:=]')\n"
+        )
+        self.assertEqual(result["findings"], [])
+
+    def test_real_call_next_to_a_pattern_definition_is_still_caught(self):
+        # The blanking must not create a hiding place: real code on the same
+        # file as pattern definitions still has to be found.
+        result = self._score(
+            "import os, re\n"
+            "PATTERN = re.compile(r'os\\.system\\s*\\(')\n"
+            "os.system('rm -rf /tmp/x')\n"
+        )
+        self.assertTrue(result["has_critical_vulnerabilities"])
+
+    def test_scorer_scanning_itself_reports_nothing(self):
+        """The end-to-end version of the above, on the real file."""
+        scorer = SecurityScorer([Path(__file__).parent.parent
+                                 / "scripts" / "security_scorer.py"])
+        self.assertEqual(scorer.get_overall_score()["findings"], [])
+
     def test_real_os_system_is_still_flagged(self):
         result = self._score('import os\nos.system("rm -rf /tmp/x")\n')
         self.assertTrue(result["has_critical_vulnerabilities"])

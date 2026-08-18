@@ -35,6 +35,14 @@ sys.dont_write_bytecode = True
 
 # Import Security Scorer module
 from security_scorer import SecurityScorer
+# Same classifier spec_validator uses, so the two tools cannot disagree about what
+# kind of thing they are looking at. A router or documentation skill is not an
+# incomplete tool, and must not be scored as one.
+from spec_validator import detect_type
+
+# Which skill types are expected to ship executable scripts. For the others, an
+# absent scripts/ directory is the correct design, not a gap to fill.
+SCRIPT_BEARING_TYPES = {"tool", "toolkit"}
 try:
     import yaml
 except ImportError:
@@ -235,6 +243,12 @@ class QualityScorer:
         self.verbose = verbose
         self.include_security = include_security
         self.report = QualityReport(str(self.skill_path))
+        # Classified once, up front. Every structural expectation below is read
+        # through this: a router skill that ships guidance and no scripts is
+        # complete, and telling it to "add sample data" is advice against the
+        # spec, not for it.
+        self.skill_type = detect_type(self.skill_path)
+        self.expects_scripts = self.skill_type in SCRIPT_BEARING_TYPES
         
     def log_verbose(self, message: str):
         """Log verbose message if verbose mode enabled"""
@@ -642,8 +656,15 @@ class QualityScorer:
         dimension.add_score("script_complexity", avg_complexity, 25,
                            f"Average script complexity across {script_count} scripts")
                            
+        # Deliberately not "expand the scripts". Low complexity is only a finding when a
+        # script is a stub that defers its actual work to the model; a short script that
+        # does one thing completely is the goal, not a deficiency. The spec's advice is
+        # "solve, don't defer", so that is what the suggestion says.
         if avg_complexity < 15:
-            dimension.add_suggestion("Consider expanding scripts with more functionality")
+            dimension.add_suggestion(
+                "Low script complexity: check these are complete tools, not stubs that "
+                "leave the real work to Claude. If a script already does its one job, "
+                "leave it short.")
             
     def _score_error_handling(self, python_files: List[Path], dimension: QualityDimension):
         """Score error handling quality"""
@@ -780,47 +801,68 @@ class QualityScorer:
         self.report.add_dimension(dimension)
         
     def _score_directory_structure(self, dimension: QualityDimension):
-        """Score directory structure completeness"""
-        required_dirs = ["scripts"]
-        recommended_dirs = ["assets", "references", "expected_outputs"]
+        """Score directory structure completeness, against what this skill type needs.
+
+        A `router` or `documentation` skill has no scripts to hold sample inputs or
+        expected outputs. Scoring it against a tool's layout produces the one piece of
+        advice the Agent Skills spec explicitly warns against — padding a skill with
+        directories it does not need to raise a number.
+        """
+        if self.expects_scripts:
+            required_dirs = ["scripts"]
+            recommended_dirs = ["assets", "references", "expected_outputs"]
+        else:
+            # Guidance skills are structured by what they route to.
+            required_dirs = []
+            recommended_dirs = ["references"]
+            if self.skill_type == "router":
+                recommended_dirs = ["guides", "references"]
 
         score = 0
 
-        # Required directories (15 points)
-        for dir_name in required_dirs:
-            if (self.skill_path / dir_name).exists():
-                score += 15 / len(required_dirs)
-
-        # Recommended directories (10 points)
-        present_recommended = 0
-        for dir_name in recommended_dirs:
+        def present(dir_name: str) -> bool:
             # "references" matches either accepted spelling; see _find_reference_dir.
             if dir_name == "references":
-                if self._find_reference_dir() is not None:
-                    present_recommended += 1
-            elif (self.skill_path / dir_name).exists():
-                present_recommended += 1
-                
+                return self._find_reference_dir() is not None
+            return (self.skill_path / dir_name).exists()
+
+        # Required directories (15 points). With none required, the points are not
+        # withheld — there is nothing missing to withhold them for.
+        if required_dirs:
+            for dir_name in required_dirs:
+                if present(dir_name):
+                    score += 15 / len(required_dirs)
+        else:
+            score += 15
+
+        # Recommended directories (10 points)
+        present_recommended = sum(1 for d in recommended_dirs if present(d))
         score += (present_recommended / len(recommended_dirs)) * 10
-        
+
         dimension.add_score("directory_structure", score, 25,
-                           f"Directory structure completeness")
-                           
-        missing_recommended = [
-            d for d in recommended_dirs
-            if not (self._find_reference_dir() is not None if d == "references"
-                    else (self.skill_path / d).exists())
-        ]
+                            f"Directory structure completeness ({self.skill_type} skill)")
+
+        missing_recommended = [d for d in recommended_dirs if not present(d)]
         if missing_recommended:
-            dimension.add_suggestion(f"Add recommended directories: {', '.join(missing_recommended)}")
+            dimension.add_suggestion(
+                f"Add recommended directories for a {self.skill_type} skill: "
+                f"{', '.join(missing_recommended)}")
             
     def _score_assets(self, dimension: QualityDimension):
         """Score asset availability and quality"""
         assets_dir = self.skill_path / "assets"
-        
+
         if not assets_dir.exists():
+            if not self.expects_scripts:
+                # Nothing consumes sample data in a guidance skill. Full marks: there
+                # is no gap here, and inventing one would push the author to add files
+                # the skill has no use for.
+                dimension.add_score("assets_existence", 25, 25,
+                                    f"No assets needed for a {self.skill_type} skill")
+                return
             dimension.add_score("assets_existence", 5, 25, "Assets directory missing")
-            dimension.add_suggestion("Create assets directory with sample data")
+            dimension.add_suggestion(
+                "Create assets/ with sample inputs the bundled scripts can run against")
             return
             
         asset_files = [f for f in assets_dir.rglob("*") if f.is_file()]
@@ -846,8 +888,17 @@ class QualityScorer:
         expected_dir = self.skill_path / "expected_outputs"
         
         if not expected_dir.exists():
+            if not self.expects_scripts:
+                # Expected outputs pin script behaviour. With no scripts there is
+                # nothing to pin, so this is not a missing component.
+                dimension.add_score("expected_outputs", 25, 25,
+                                    f"No expected outputs needed for a "
+                                    f"{self.skill_type} skill")
+                return
             dimension.add_score("expected_outputs", 10, 25, "Expected outputs directory missing")
-            dimension.add_suggestion("Add expected_outputs directory with sample results")
+            dimension.add_suggestion(
+                "Add expected_outputs/ so script_tester can compare real runs "
+                "against known-good results")
             return
             
         output_files = [f for f in expected_dir.rglob("*") if f.is_file()]

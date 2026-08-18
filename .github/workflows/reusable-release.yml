@@ -63,19 +63,28 @@ jobs:
 
       - name: Run the extracted artifact's own scripts, the way an install would
         run: |
-          if [ -d "installed-check/${{ inputs.skill_name }}/scripts" ]; then
-            python /tmp/skill-vision/scripts/script_tester.py "installed-check/${{ inputs.skill_name }}"
-            code=$?
-            # Exit 0 = all pass, 2 = partial (e.g. missing expected_outputs fixtures --
-            # a known, accepted baseline across these repos today, not real breakage).
-            # Exit 1 is the only outcome that means a script actually crashed; block on it.
-            if [ "$code" -eq 1 ]; then
-              echo "::error::a bundled script crashed on the extracted artifact; blocking release"
-              exit 1
-            fi
-          else
+          if [ ! -d "installed-check/${{ inputs.skill_name }}/scripts" ]; then
             echo "No scripts/ directory in this skill; nothing to execute."
+            exit 0
           fi
+          # `|| code=$?` is load-bearing. GitHub runs this with `bash -e`, so a bare
+          # failing command aborts the step immediately and everything below it --
+          # including the exit-code branch -- never executes. That is what happened
+          # before: the tolerance logic here was unreachable code.
+          code=0
+          python /tmp/skill-vision/scripts/script_tester.py \
+            "installed-check/${{ inputs.skill_name }}" || code=$?
+          # 0 = every script passed every check.
+          # 2 = at least one script is PARTIAL (a failing check, or no runnable
+          #     tests) but nothing crashed. Reported, not blocking: the dual-output
+          #     and sample-data checks are house preferences, not spec requirements.
+          # 1 = a script failed outright or the run itself errored. Blocks.
+          case "$code" in
+            0) echo "All bundled scripts passed." ;;
+            2) echo "::warning::script_tester reported PARTIAL (exit 2) on the extracted artifact; releasing anyway" ;;
+            *) echo "::error::script_tester exited $code on the extracted artifact; blocking release"
+               exit 1 ;;
+          esac
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

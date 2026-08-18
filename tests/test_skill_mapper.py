@@ -113,6 +113,33 @@ class SkillMapperTestCase(unittest.TestCase):
         model = sm.collect(root)
         self.assertEqual(model["counts"]["broken_links"], 0)
         self.assertEqual(model["counts"]["stranded"], 0)
+        self.assertEqual(model["counts"]["too_deep"], 0)
+
+    def test_too_deep_nodes_match_validator_findings(self):
+        root = build(
+            self.tmp, "s", GOOD_FM,
+            body="[guide](guides/a.md)\n",
+            files={"guides/a.md": "[deep](references/b.md)\n",
+                   "references/b.md": "[deeper](references/c.md)\n",
+                   "references/c.md": "# C\n"},
+        )
+        model = sm.collect(root)
+        result = sv.validate(root)
+
+        mapper_deep = {n["path"] for n in model["nodes"] if n.get("too_deep")}
+        validator_deep = {f.message.split(" is ")[0]
+                          for f in result.findings if f.code == "REFERENCE_TOO_DEEP"}
+        self.assertEqual(mapper_deep, validator_deep)
+        self.assertEqual(mapper_deep, {"references/b.md", "references/c.md"})
+
+    def test_hop_counts_recorded_on_nodes(self):
+        root = build(self.tmp, "s", GOOD_FM, body="[guide](guides/a.md)\n",
+                     files={"guides/a.md": "[deep](references/b.md)\n",
+                            "references/b.md": "# B\n"})
+        hops = {n["path"]: n.get("hops") for n in sm.collect(root)["nodes"]}
+        self.assertEqual(hops["SKILL.md"], 0)
+        self.assertEqual(hops["guides/a.md"], 1)
+        self.assertEqual(hops["references/b.md"], 2)
 
     # --- rendering -------------------------------------------------------------
 
