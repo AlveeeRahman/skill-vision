@@ -57,10 +57,37 @@ NETWORK_MODULES = {
     "ftplib", "smtplib", "telnetlib", "xmlrpc", "websockets", "boto3",
 }
 
-# Standard-library modules a skill script may legitimately import while still being
-# described as "stdlib only". Deliberately not exhaustive: unknown names are resolved
-# against the interpreter's own module list at runtime.
-_STDLIB = getattr(sys, "stdlib_module_names", frozenset())
+def _stdlib_names() -> frozenset:
+    """Standard-library module names for the running interpreter.
+
+    `sys.stdlib_module_names` arrived in 3.10. Falling back to an empty set on 3.9
+    silently classified *every* import as third-party, including `argparse`, which
+    turned every correct "stdlib only" claim into a contradiction. The CI matrix
+    caught it on 3.9 and nowhere else.
+
+    The fallback reads the stdlib directory listing instead. Nothing is imported, so
+    no module side effects run during an audit.
+    """
+    names = set(getattr(sys, "stdlib_module_names", ()) or ())
+    if names:
+        return frozenset(names)
+
+    import os
+    import sysconfig
+
+    names = set(sys.builtin_module_names)
+    stdlib_dir = sysconfig.get_paths().get("stdlib")
+    if stdlib_dir and os.path.isdir(stdlib_dir):
+        for entry in os.listdir(stdlib_dir):
+            path = os.path.join(stdlib_dir, entry)
+            if entry.endswith(".py"):
+                names.add(entry[:-3])
+            elif entry != "site-packages" and os.path.isdir(path):
+                names.add(entry)
+    return frozenset(names)
+
+
+_STDLIB = _stdlib_names()
 
 DOC_FILES = ("SKILL.md", "README.md")
 

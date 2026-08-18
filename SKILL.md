@@ -133,7 +133,7 @@ distance, not directory depth**: a file two directories down may be one hop away
 depending only on who links it. `DEEP_NESTING` measures directory depth and is advisory;
 this one maps to a real failure.
 
-The scripts are covered by tests: `python3 -m pytest tests/ -q` runs 193 checks,
+The scripts are covered by tests: `python3 -m pytest tests/ -q` runs 196 checks,
 including adversarial fixtures that build deliberately broken skills and assert each
 defect is caught, a parity suite asserting `skill_mapper.py` and `spec_validator.py`
 report the same broken, orphaned and too-deep files off the same graph, and false-positive

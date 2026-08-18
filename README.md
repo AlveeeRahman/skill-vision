@@ -328,7 +328,7 @@ with `|| code=$?` and verified against a step that exits 2.
 
 Tier is now computed rather than asserted, since SKILL.md claimed POWERFUL while the scorer
 said STANDARD. The self-scan output above is regenerated rather than stale. The test suite
-is 193 checks, up from 136.
+is 196 checks, up from 136.
 
 ## What's in the box
 
@@ -337,7 +337,7 @@ is 193 checks, up from 136.
 - **`agents/`**: [hallucination-hunter.md](agents/hallucination-hunter.md), a subagent for the claims a script can't settle.
 - **`references/`**: the standards the tools implement: [agent-skills-spec.md](references/agent-skills-spec.md), [skill-structure-specification.md](references/skill-structure-specification.md), [tier-requirements-matrix.md](references/tier-requirements-matrix.md), [quality-scoring-rubric.md](references/quality-scoring-rubric.md), [validator-comparison.md](references/validator-comparison.md).
 - **`assets/sample-skill/`**: a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
-- **`tests/`**: 193 adversarial checks on the validators, the auditor and the mapper, including a parity suite proving they can't drift from each other, and false-positive fixtures asserting correct skills produce nothing.
+- **`tests/`**: 196 adversarial checks on the validators, the auditor and the mapper, including a parity suite proving they can't drift from each other, and false-positive fixtures asserting correct skills produce nothing.
 
 ## 👀 Who checks the checker? A challenge
 

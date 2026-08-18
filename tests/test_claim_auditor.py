@@ -315,6 +315,30 @@ class TestCapabilityClaims(AuditorTestCase):
         self.assertNotIn("CAPABILITY_CLAIM_FALSE", self.codes(root))
 
 
+class TestStdlibDetection(unittest.TestCase):
+    """Pins the 3.9 regression: an empty stdlib set makes every import third-party."""
+
+    def test_common_stdlib_modules_are_recognised(self):
+        for mod in ("argparse", "json", "os", "sys", "re", "pathlib", "subprocess"):
+            self.assertIn(mod, ca._STDLIB, mod)
+
+    def test_fallback_path_finds_the_stdlib_without_sys_attribute(self):
+        saved = getattr(sys, "stdlib_module_names", None)
+        try:
+            if saved is not None:
+                del sys.stdlib_module_names
+            names = ca._stdlib_names()
+        finally:
+            if saved is not None:
+                sys.stdlib_module_names = saved
+        for mod in ("argparse", "json", "pathlib"):
+            self.assertIn(mod, names, f"{mod} missing from the pre-3.10 fallback")
+
+    def test_third_party_still_reads_as_third_party(self):
+        self.assertTrue(ca.is_third_party("requests", set()))
+        self.assertFalse(ca.is_third_party("argparse", set()))
+
+
 class TestSentenceSplitting(unittest.TestCase):
     def test_filenames_do_not_end_sentences(self):
         got = list(ca.sentences("Run generate_schematic.py now. Then stop."))
