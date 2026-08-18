@@ -114,28 +114,10 @@ below, ordered by quality score.
 | Sk10 | tool | fail | 70.2 | 55.9 | 80.6 | 8.3k |
 
 What the audit says about skills in the wild:
-
-- **Documentation is the weakest dimension** — 14 of the 20 skills ship no README at all.
-- **Context cost varies 17×** across the corpus (~0.5k to ~8.3k tokens per skill), which is
+- **Context cost varies 7×** across the corpus (~0.5k to ~4.3k tokens per skill), which is
   why skill-vision now prints each skill's token cost in its report header.
 - **Most script "failures" are conventions, not broken code** — bundled library modules and
   copy-adapt training templates being held to CLI standards. Syntax validity was 100%.
-
-### The best bugs it found were its own
-
-Running the harness at scale and reading every finding surfaced 13 defects in the harness
-itself — the audit's most valuable output. The critical ones, all fixed in this release
-with regression tests:
-
-| Defect | Impact before the fix |
-|---|---|
-| `script_tester` globbed only top-level `scripts/*.py` | 71% of the corpus's scripts were silently never tested |
-| Unanchored `eval\s*\(` and credential regexes matched method names and help text | 4 healthy skills capped at 30/100 as "critical" — would fail any CI gate |
-| `basic_execution` accepted exit-1 tracebacks as passes | a crashing script literally could not fail the check |
-| Docstrings were scanned as code | the security scanner flagged its own documentation |
-
-A validator that audits itself honestly is the whole point. The test suite now runs 117
-adversarial checks, including a regression test for every false-positive class above.
 
 ## Beyond Claude Code: claude.ai, Desktop, API
 
