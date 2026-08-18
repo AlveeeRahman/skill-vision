@@ -92,15 +92,11 @@ from loading, uploading, or triggering. The differences are substance, not brand
   documents how this tool compares to `skills-ref`, `agent-ecosystem/skill-validator`,
   and `agent-skills-lint` — *including where those tools are ahead*.
 
-## Field results: a 20-skill audit
+## Field results: a 10-skill audit
 
-All five validators were run over a private corpus of 20 real, in-use skills (145 Python
-scripts, ~45k script LOC). Skills are anonymized: the ten best are labeled `Sk1`–`Sk10`
-below, ordered by quality score. skill-vision audited itself with the same tools (84.8
-structure, B+ quality) and is excluded from the ranking so the corpus speaks for itself.
-Corpus verdict: **19/20 spec-conformant** (the one error: a SKILL.md body at ~8.2k tokens
-against the ~5k budget — you can spot it in the table), **0 verified security
-vulnerabilities**, 145/145 scripts syntax-valid.
+All five validators were run over a private corpus of 10 real, in-use skills (75 Python
+scripts, ~20k scripts). Skills are anonymized: the ten best are labeled `Sk1`–`Sk10`
+below, ordered by quality score.
 
 ### Top 10 by quality score
 
