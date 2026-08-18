@@ -387,28 +387,58 @@ def _iter_paths(text: str):
         yield m.group(1)
 
 
-def check_links(root: Path, body: str, res: Result) -> None:
-    """Dangling links, escapes above the skill root, and orphaned bundled files."""
-    referenced: set[Path] = set()
+# --- Reference graph ---------------------------------------------------------------
+# One resolver, shared by check_links() below and scripts/skill_mapper.py. A map drawn
+# from its own near-copy of this logic would drift from the validator's verdict, and a
+# drifted map is a wrong map.
+
+@dataclass
+class LinkEdge:
+    """A single markdown reference, resolved against the skill root."""
+    source: str             # markdown file holding the link, relative to the root
+    raw: str                # the reference exactly as written
+    target: str = ""        # resolved path relative to the root; "" when unresolved
+    status: str = "ok"      # ok | dangling | escapes | absolute
+    backslash: bool = False
+
+
+@dataclass
+class SkillGraph:
+    """What the skill actually references, and what an agent can actually walk to.
+
+    `referenced`, `reachable` and `bundled` hold paths relative to the skill root.
+    """
+    edges: list = field(default_factory=list)        # LinkEdge, in document order
+    referenced: set = field(default_factory=set)     # anything a markdown file resolves to
+    reachable: set = field(default_factory=set)      # anything walkable from SKILL.md
+    bundled: list = field(default_factory=list)      # files under references/assets/guides
+    md_files: list = field(default_factory=list)     # every markdown file, SKILL.md first
+
+
+def build_graph(root: Path, body: str) -> SkillGraph:
+    """Resolve every markdown reference in the skill, then walk outward from SKILL.md.
+
+    `body` is SKILL.md with its frontmatter already stripped, so a link sitting in
+    frontmatter is never counted as a progressive-disclosure reference.
+    """
+    graph = SkillGraph()
+    rroot = root.resolve()
     all_md = [root / "SKILL.md"] + [p for p in root.rglob("*.md") if p.name != "SKILL.md"]
+    graph.md_files = [p.relative_to(root) for p in all_md]
 
     for md in all_md:
         try:
             text = body if md.name == "SKILL.md" else md.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        source = str(md.relative_to(root))
         for raw in _iter_paths(text):
             if raw.startswith(("http://", "https://", "mailto:")):
                 continue
             if raw.startswith("/"):
-                res.add("warning", "ABSOLUTE_PATH",
-                        f"{md.relative_to(root)} references an absolute path: {raw}",
-                        "Use paths relative to the skill root so the skill stays portable.")
+                graph.edges.append(LinkEdge(source, raw, status="absolute"))
                 continue
-            if "\\" in raw:
-                res.add("warning", "BACKSLASH_PATH",
-                        f"{md.relative_to(root)} uses backslashes in {raw}",
-                        "Use forward slashes on every platform.")
+            edge = LinkEdge(source, raw, backslash="\\" in raw)
             # The spec keeps file references relative to the skill root; some authors
             # write them relative to the containing file. Accept either, and only report
             # a dangling link when neither resolves.
@@ -419,23 +449,19 @@ def check_links(root: Path, body: str, res: Result) -> None:
                     candidates.append(cand)
 
             resolved = next((c for c in candidates if c.exists()), None)
-            inside = [c for c in candidates
-                      if str(c).startswith(str(root.resolve()))]
+            inside = [c for c in candidates if str(c).startswith(str(rroot))]
             if resolved is None and not inside:
-                res.add("error", "PATH_ESCAPES_SKILL",
-                        f"{md.relative_to(root)} references {raw}, which resolves outside "
-                        "the skill directory.",
-                        "`../` paths break once the skill is installed on its own. Bundle "
-                        "the target or drop the link.")
-                continue
-            if resolved is None:
-                res.add("error", "DANGLING_REFERENCE",
-                        f"{md.relative_to(root)} links to {raw}, which does not exist.")
+                edge.status = "escapes"
+            elif resolved is None:
+                edge.status = "dangling"
             else:
                 try:
-                    referenced.add(resolved.relative_to(root.resolve()))
+                    rel = resolved.relative_to(rroot)
+                    edge.target = str(rel)
+                    graph.referenced.add(rel)
                 except ValueError:
                     pass
+            graph.edges.append(edge)
 
     # Reachability is transitive: walk outward from SKILL.md. A reference file that is
     # only mentioned by another unreachable file is itself unreachable, which a
@@ -453,32 +479,61 @@ def check_links(root: Path, body: str, res: Result) -> None:
                 cand = (base / raw).resolve()
                 if cand.exists() and cand.is_file():
                     try:
-                        found.add(cand.relative_to(root.resolve()))
+                        found.add(cand.relative_to(rroot))
                     except ValueError:
                         pass
                     break
         return found
 
-    reachable, frontier = set(), [root / "SKILL.md"]
+    frontier = [root / "SKILL.md"]
     while frontier:
         cur = frontier.pop()
         for rel in paths_in(cur):
-            if rel in reachable:
+            if rel in graph.reachable:
                 continue
-            reachable.add(rel)
+            graph.reachable.add(rel)
             nxt = root / rel
             if nxt.suffix.lower() == ".md" and nxt.is_file():
                 frontier.append(nxt)
 
+    graph.bundled = [p.relative_to(root) for d in ("references", "assets", "guides")
+                     if (root / d).is_dir()
+                     for p in (root / d).rglob("*")
+                     if p.is_file() and not any(j in p.parts for j in JUNK_PATTERNS)]
+    return graph
+
+
+def check_links(root: Path, body: str, res: Result) -> None:
+    """Dangling links, escapes above the skill root, and orphaned bundled files."""
+    graph = build_graph(root, body)
+
+    for edge in graph.edges:
+        if edge.status == "absolute":
+            res.add("warning", "ABSOLUTE_PATH",
+                    f"{edge.source} references an absolute path: {edge.raw}",
+                    "Use paths relative to the skill root so the skill stays portable.")
+            continue
+        if edge.backslash:
+            res.add("warning", "BACKSLASH_PATH",
+                    f"{edge.source} uses backslashes in {edge.raw}",
+                    "Use forward slashes on every platform.")
+        if edge.status == "escapes":
+            res.add("error", "PATH_ESCAPES_SKILL",
+                    f"{edge.source} references {edge.raw}, which resolves outside "
+                    "the skill directory.",
+                    "`../` paths break once the skill is installed on its own. Bundle "
+                    "the target or drop the link.")
+        elif edge.status == "dangling":
+            res.add("error", "DANGLING_REFERENCE",
+                    f"{edge.source} links to {edge.raw}, which does not exist.")
+
     # Bundled files nothing points at will never be loaded.
-    bundled = [p.relative_to(root) for d in ("references", "assets", "guides")
-               if (root / d).is_dir()
-               for p in (root / d).rglob("*")
-               if p.is_file() and not any(j in p.parts for j in JUNK_PATTERNS)]
-    orphans = [p for p in bundled
-               if p not in reachable and p not in referenced and p.suffix.lower() == ".md"]
-    unreachable = [p for p in bundled
-                   if p not in reachable and p in referenced and p.suffix.lower() == ".md"]
+    orphans = [p for p in graph.bundled
+               if p not in graph.reachable and p not in graph.referenced
+               and p.suffix.lower() == ".md"]
+    unreachable = [p for p in graph.bundled
+                   if p not in graph.reachable and p in graph.referenced
+                   and p.suffix.lower() == ".md"]
     for u in sorted(unreachable):
         res.add("info", "UNREACHABLE_FROM_SKILL_MD",
                 f"{u} is linked from another file but not reachable from SKILL.md.",
@@ -490,13 +545,13 @@ def check_links(root: Path, body: str, res: Result) -> None:
                 "SKILL.md or remove it.")
 
     # Depth: SKILL.md -> reference -> reference is hard for agents to follow.
-    for md in all_md:
-        if md.name == "SKILL.md":
+    for rel in graph.md_files:
+        if rel.name == "SKILL.md":
             continue
-        depth = len(md.relative_to(root).parts) - 1
+        depth = len(rel.parts) - 1
         if depth > 2:
             res.add("info", "DEEP_NESTING",
-                    f"{md.relative_to(root)} is nested {depth} levels deep.",
+                    f"{rel} is nested {depth} levels deep.",
                     "Keep reference files shallow so they are easy to discover.")
 
 

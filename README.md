@@ -17,7 +17,7 @@ git clone https://github.com/AlveeeRahman/skill-vision.git ~/.claude/skills/skil
 git clone https://github.com/AlveeeRahman/skill-vision.git .claude/skills/skill-vision
 ```
 
-That's the whole install — no packages, no venv (any Python 3.9+). Then ask Claude, in your own words:
+That's the whole install. No packages, no venv, just any Python 3.9+. Then ask Claude, in your own words:
 
 > *"Validate `./my-skill` against the Agent Skills spec."*
 > *"Score the quality of my skill and tell me what to fix first."*
@@ -38,11 +38,11 @@ The repo is itself a valid skill, so it inspects its own hull. Genuine output on
   CONFORMANT  (0 errors, 0 warnings, 2 notes)
 ```
 
-The header states what the skill costs you in context — description tokens load every session, body tokens on trigger — and it even notices its own `.git` directory and tells you how to keep it out of your upload. A checker that never looks at itself can't be trusted to look at yours.
+The header states what the skill costs you in context: description tokens load every session, body tokens on trigger. It even notices its own `.git` directory and tells you how to keep it out of your upload. A checker that never looks at itself can't be trusted to look at yours.
 
 ## How it works
 
-Your skill passes through five independent inspections:
+Your skill passes through five independent inspections, plus one that draws a picture instead of a verdict:
 
 ```mermaid
 flowchart LR
@@ -57,40 +57,79 @@ flowchart LR
         quality --> security["security_scorer<br/>risk posture"]
     end
     spec --> house
+    spec -.shares its graph with.-> mapper["skill_mapper<br/>same files, same links —<br/>drawn, not scored"]
     security --> verdict{{"👀 Verdict<br/>CONFORMANT or not<br/>grade A+ to F · ~tokens"}}
+    mapper --> picture(["🗺️ the skill,<br/>as a Mermaid flowchart"])
     classDef specStyle fill:#f59e0b,stroke:#b45309,color:#1f2937
     classDef houseStyle fill:#3b82f6,stroke:#1d4ed8,color:#ffffff
     classDef verdictStyle fill:#22c55e,stroke:#15803d,color:#1f2937
+    classDef mapStyle fill:#8b5cf6,stroke:#6d28d9,color:#ffffff
     class spec specStyle
     class house,tester,quality,security houseStyle
     class verdict verdictStyle
+    class mapper,picture mapStyle
 ```
 
-The amber gate is binding: `scripts/spec_validator.py` rules on the letter of the Agent Skills spec — the rules that decide whether a skill actually loads, uploads, and triggers — and reports each skill's estimated context cost (description tokens load every session; body tokens load on trigger, the way Claude Code's own doctor counts them). The blue chain is advisory: structure and docs, script execution (recursive — nested `scripts/` packages included), a five-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins** — skill-vision never asks you to pad a concise skill to satisfy someone's style guide.
+The amber gate is binding. `scripts/spec_validator.py` rules on the letter of the Agent Skills spec, the rules that decide whether a skill actually loads, uploads, and triggers. It also reports each skill's estimated context cost (description tokens load every session, body tokens load on trigger, the way Claude Code's own doctor counts them). The blue chain is advisory: structure and docs, script execution (recursive, with nested `scripts/` packages included), a five-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins**. Skill-vision never asks you to pad a concise skill to satisfy someone's style guide.
+
+The purple branch doesn't score anything. `scripts/skill_mapper.py` reuses the exact graph `spec_validator.py` already built to check links: same files, same resolved paths, same broken and orphaned ones. It draws that graph as a flowchart instead of a findings list. Ask Claude *"show me this skill's codebase as a flowchart"* and that's what runs.
+
+### What that flowchart looks like
+
+Genuine output, `python3 scripts/skill_mapper.py .` on this repository:
+
+```mermaid
+flowchart TD
+    SKILL_md["SKILL.md<br/>~2.0k tokens on trigger"]
+    subgraph scripts["scripts/"]
+        skill_mapper_py["skill_mapper.py"]
+        spec_validator_py["spec_validator.py"]
+        skill_validator_py["skill_validator.py"]
+        script_tester_py["script_tester.py"]
+        quality_scorer_py["quality_scorer.py"]
+    end
+    subgraph references["references/"]
+        agent_skills_spec_md["agent-skills-spec.md"]
+        validator_comparison_md["validator-comparison.md"]
+    end
+    SKILL_md --> skill_mapper_py
+    SKILL_md --> spec_validator_py
+    SKILL_md --> skill_validator_py
+    SKILL_md --> script_tester_py
+    SKILL_md --> quality_scorer_py
+    SKILL_md --> agent_skills_spec_md
+    agent_skills_spec_md --> spec_validator_py
+    classDef entry fill:#f59e0b,stroke:#b45309,color:#1f2937
+    class SKILL_md entry
+```
+
+*(Trimmed to the scripts and one reference for a README-sized example. The full run covers all 28 files this skill ships and prints a summary line with the exact file, link, and orphan counts to stderr.)* Nodes are grouped by directory, the amber box is always SKILL.md, and anything drawn in grey-dashed or red is exactly what `spec_validator.py` would flag too. It's the same check, just drawn instead of printed.
 
 ## Why skill-vision, and not another "skill-tester"?
 
-Several projects already occupy that name — `Facets-cloud/claude-skill-tester`,
+Several projects already occupy that name: `Facets-cloud/claude-skill-tester`,
 `skill-tester-swarm`, `openclaw-skill-tester`, and the `skill-tester` meta-skill inside
 the big claude-skills monorepos (from which this project descends). This one is named
-for what it does: it examines your skills and tells you exactly what would keep them
+for what it does. It examines your skills and tells you exactly what would keep them
 from loading, uploading, or triggering. The differences are substance, not branding:
 
 - **Spec-first, opinions second.** Spec conformance ([the rules](references/agent-skills-spec.md)
   that break a skill) and house-standard quality (opinions) are separate verdicts from
-  separate tools — and the spec wins. Most alternatives blend them and punish concise
+  separate tools, and the spec wins. Most alternatives blend them and punish concise
   skills for not being padded.
 - **Skill-type aware.** Skills are classified first (`documentation`, `tool`, `toolkit`,
   `router`) so script-oriented rules are never misapplied to skills that legitimately
   contain no scripts.
-- **Adversarially tested.** `python3 -m pytest tests/ -q` runs 117 checks, including
-  fixtures that construct deliberately broken skills and assert every defect is caught.
+- **Adversarially tested.** `python3 -m pytest tests/ -q` runs 131 checks, including
+  fixtures that construct deliberately broken skills and assert every defect is caught,
+  plus a parity suite proving `skill_mapper.py` draws the same broken and orphaned
+  files `spec_validator.py` reports. One graph, not two that can drift apart.
   A validator that is not itself tested is folklore.
 - **Security posture scoring.** `scripts/security_scorer.py` is a dimension the
   alternatives don't have.
 - **Honest about the competition.** [references/validator-comparison.md](references/validator-comparison.md)
   documents how this tool compares to `skills-ref`, `agent-ecosystem/skill-validator`,
-  and `agent-skills-lint` — *including where those tools are ahead*.
+  and `agent-skills-lint`, *including where those tools are ahead*.
 
 ## Field results: a 10-skill audit
 
@@ -116,31 +155,31 @@ below, ordered by quality score.
 What the audit says about skills in the wild:
 - **Context cost varies 7×** across the corpus (~0.5k to ~4.3k tokens per skill), which is
   why skill-vision now prints each skill's token cost in its report header.
-- **Most script "failures" are conventions, not broken code** — bundled library modules and
-  copy-adapt training templates being held to CLI standards. Syntax validity was 100%.
+- **Most script "failures" are conventions, not broken code.** Bundled library modules and
+  copy-adapt training templates get held to CLI standards they were never written for. Syntax validity was 100%.
 
 ## Beyond Claude Code: claude.ai, Desktop, API
 
-**claude.ai / Claude Desktop** — skills upload as a ZIP containing one top-level folder with `SKILL.md` inside it:
+**claude.ai / Claude Desktop**: skills upload as a ZIP containing one top-level folder with `SKILL.md` inside it:
 
 ```bash
 # From the directory that contains skill-vision/ — note the .git exclusion:
 zip -r skill-vision.zip skill-vision -x "skill-vision/.git/*" "skill-vision/.git"
 ```
 
-Upload at **Settings → Features → Skills** (claude.ai) or **"+" → Create skill** (Desktop). One caveat: the web uploader caps the frontmatter `description` at **200 characters** (the spec allows 1024, and this repo ships 460, tuned for Claude Code triggering). Shorten it in your zip copy — e.g. *"Validate, test, and score Agent Skills before you ship: spec conformance, structure checks, script testing, quality grades A–F, and security posture."*
+Upload at **Settings → Features → Skills** (claude.ai) or **"+" → Create skill** (Desktop). One caveat: the web uploader caps the frontmatter `description` at **200 characters** (the spec allows 1024, and this repo ships 460, tuned for Claude Code triggering). Shorten it in your zip copy, e.g. *"Validate, test, and score Agent Skills before you ship: spec conformance, structure checks, script testing, quality grades A–F, and security posture."*
 
-Skills enabled on claude.ai can also come back to the CLI — a one-time
+Skills enabled on claude.ai can also come back to the CLI. Run this once:
 
 ```bash
 CLAUDE_CODE_SYNC_SKILLS=1 claude -p "load skills"
 ```
 
-downloads them into `~/.claude/skills/synced/`, where every future local Claude Code session loads them automatically (re-run it after updating a skill on claude.ai).
+It downloads them into `~/.claude/skills/synced/`, where every future local Claude Code session loads them automatically (re-run it after updating a skill on claude.ai).
 
-**Claude API** — upload the same ZIP via the beta skills endpoints (`client.beta.skills.create`) and attach it with `container: {skills: [{type: "custom", skill_id: ...}]}`. The API execution container has no network and no package installs — skill-vision is stdlib-only precisely so it runs there unmodified.
+**Claude API**: upload the same ZIP via the beta skills endpoints (`client.beta.skills.create`) and attach it with `container: {skills: [{type: "custom", skill_id: ...}]}`. The API execution container has no network and no package installs. Skill-vision is stdlib-only precisely so it runs there unmodified.
 
-**A spec rule this repo demonstrates:** a package may contain exactly one `SKILL.md`, at its root. That's why the bundled demo skill ships its manifest as `assets/sample-skill/SKILL.md.fixture` — restore the name only while practicing on it:
+**A spec rule this repo demonstrates:** a package may contain exactly one `SKILL.md`, at its root. That's why the bundled demo skill ships its manifest as `assets/sample-skill/SKILL.md.fixture`. Restore the name only while practicing on it:
 
 ```bash
 cp assets/sample-skill/SKILL.md.fixture assets/sample-skill/SKILL.md
@@ -150,7 +189,7 @@ rm assets/sample-skill/SKILL.md
 
 ## 🛠️ Under the hood: the five validators
 
-Everything Claude runs for you is a plain stdlib CLI — which means your CI can run the same inspections without Claude in the loop:
+Everything Claude runs for you is a plain stdlib CLI, which means your CI can run the same inspections without Claude in the loop:
 
 ```bash
 python3 scripts/spec_validator.py path/to/your-skill            # spec: will it load? (--strict, --recursive)
@@ -158,7 +197,16 @@ python3 scripts/skill_validator.py path/to/your-skill --json    # house structur
 python3 scripts/script_tester.py path/to/your-skill             # do bundled scripts run? (--timeout, default 30s)
 python3 scripts/quality_scorer.py path/to/your-skill --detailed # score + grade + improvement roadmap
 python3 scripts/security_scorer.py path/to/your-skill           # risk posture
+python3 scripts/skill_mapper.py path/to/your-skill               # not a gate — draws the graph as Mermaid
 ```
+
+`skill_mapper.py` isn't in the exit-code table below on purpose. It doesn't score or
+pass or fail anything, so there's no gate to build CI around. It writes no file
+either, only Mermaid to stdout, so pipe it into a file yourself if you want one:
+`python3 scripts/skill_mapper.py path/to/your-skill --fence > diagram.md`. It reuses
+`spec_validator.py`'s own graph, `build_graph()`, to draw the same files and the same
+broken or orphaned references the spec check already found, as a flowchart instead of
+a findings list.
 
 <details>
 <summary><b>Exit codes</b> — verified behavior, safe to build CI gates on</summary>
@@ -177,7 +225,7 @@ Failures are reported inside the report itself (missing paths, malformed YAML fr
 <details>
 <summary><b>CI and pre-commit recipes</b> — gate a whole repo of skills</summary>
 
-This repo gates itself this way — the live workflow is [.github/workflows/ci.yml](.github/workflows/ci.yml).
+This repo gates itself this way. The live workflow is [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ```yaml
 # GitHub Actions — assumes your skills live in skills/<name>/
@@ -217,14 +265,14 @@ python3 ~/.claude/skills/skill-vision/scripts/spec_validator.py path/to/your-ski
 ## What's in the box
 
 - **`SKILL.md`** — the instructions Claude loads: when to inspect, which tool to run, how to work the roadmap.
-- **`scripts/`** — the five validators (all stdlib-only): `spec_validator.py`, `skill_validator.py`, `script_tester.py`, `quality_scorer.py`, `security_scorer.py`.
+- **`scripts/`** — the five validators (all stdlib-only): `spec_validator.py`, `skill_validator.py`, `script_tester.py`, `quality_scorer.py`, `security_scorer.py`, plus `skill_mapper.py`, which draws rather than scores.
 - **`references/`** — the standards the tools implement: [agent-skills-spec.md](references/agent-skills-spec.md), [skill-structure-specification.md](references/skill-structure-specification.md), [tier-requirements-matrix.md](references/tier-requirements-matrix.md), [quality-scoring-rubric.md](references/quality-scoring-rubric.md), [validator-comparison.md](references/validator-comparison.md).
 - **`assets/sample-skill/`** — a demo skill to practice on. Its own docs: [assets/sample-skill/README.md](assets/sample-skill/README.md) and [assets/sample-skill/references/api-reference.md](assets/sample-skill/references/api-reference.md).
-- **`tests/`** — 117 adversarial checks on the validators themselves.
+- **`tests/`** — 131 adversarial checks on the validators and the mapper, including a parity suite proving neither can drift from the other.
 
 ## 👀 Who checks the checker? — a challenge
 
-Want a fun one? Improve skill-vision — then make the *current* checker examine the *new*
+Want a fun one? Improve skill-vision, then make the *current* checker examine the *new*
 one before it takes over:
 
 ```bash
@@ -241,26 +289,26 @@ python3 scripts/quality_scorer.py /tmp/incumbent --detailed
 ```
 
 House rule for pull requests: **the candidate must score at least as well under the
-incumbent as the incumbent scores under the candidate** — nobody gets to lower the bar
+incumbent as the incumbent scores under the candidate**. Nobody gets to lower the bar
 for their own inspection. And if your new checker spots a *real* bug in the old one, that
-is the highest honor this repo awards: document it, and it joins the defect table above.
+is the highest honor this repo awards: document it in the project's issue tracker.
 
-**Brag with numbers.** Ran skill-vision on your own best skill? Post its report header — the
-token line, the `CONFORMANT` verdict, and your quality score — in an
+**Brag with numbers.** Ran skill-vision on your own best skill? Post its report header
+(the token line, the `CONFORMANT` verdict, and your quality score) in an
 [issue labeled `checkup`](https://github.com/AlveeeRahman/skill-vision/issues/new?labels=checkup&title=Checkup%3A+my-skill).
 The highest verified score earns a permanent shout-out in this README.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md): how to run the tests, and the ship's two hard rules — the repo stays spec-CONFORMANT, and `scripts/` stays stdlib-only. [SKILL.md](SKILL.md) holds the full skill documentation.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run the tests. The ship's two hard rules: the repo stays spec-CONFORMANT, and `scripts/` stays stdlib-only. [SKILL.md](SKILL.md) holds the full skill documentation.
 
 ## License
 
-[MIT License](https://github.com/AlveeeRahman/skill-vision/blob/main/LICENSE) — copyright (c) 2026 MrPirate. Full text in [`LICENSE`](LICENSE) at the repo root.
+[MIT License](https://github.com/AlveeeRahman/skill-vision/blob/main/LICENSE), copyright (c) 2026 MrPirate. Full text in [`LICENSE`](LICENSE) at the repo root.
 
 ## 🏴‍☠️ Join the crew
 
-- **⭐ Star the repo** if skill-vision kept a broken skill from shipping — it helps other skill authors find it.
+- **⭐ Star the repo** if skill-vision kept a broken skill from shipping. It helps other skill authors find it.
 - **Found a loose plank?** [Open an issue](https://github.com/AlveeeRahman/skill-vision/issues). This repository is maintained with the help of an autonomous local agent that reads and triages what comes in.
 
 *Fair winds, and may your skills always load on the first try.*

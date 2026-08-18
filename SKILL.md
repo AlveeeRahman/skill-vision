@@ -9,12 +9,42 @@ description: "Validate, test, and score the quality of Agent Skills for Claude C
 
 **Tier**: POWERFUL · **Category**: Engineering Quality Assurance · **Dependencies**: None (Python stdlib only)
 
-Meta-skill that validates, tests, and scores skills in this repository. Four tools, run from the **repo root** with full paths:
+Meta-skill that validates, tests, and scores skills in this repository. Five tools, run from the **repo root** with full paths:
 
 1. **`scripts/skill_validator.py`** — structure + documentation compliance
 2. **`scripts/script_tester.py`** — Python script syntax/imports/runtime/output testing
 3. **`scripts/quality_scorer.py`** — multi-dimensional scoring with letter grade
 4. **`scripts/security_scorer.py`** — security posture scoring (also available via `quality_scorer.py --include-security`)
+5. **`scripts/skill_mapper.py`** — draws the skill's files and reference graph as a Mermaid flowchart
+
+## See the codebase, not just the verdict
+
+The four scorers above answer "is this skill any good." `skill_mapper.py` answers a
+different question: what's actually in the skill, and what can Claude reach from
+SKILL.md? A file nothing links to is never read under progressive disclosure, no
+matter how well it's written. That's a shape problem, and a picture shows it faster
+than a list of findings does.
+
+```bash
+python3 scripts/skill_mapper.py path/to/your-skill              # Mermaid to stdout
+python3 scripts/skill_mapper.py path/to/your-skill --detail      # + function/class counts, CLI flags per script
+python3 scripts/skill_mapper.py path/to/your-skill --json        # the same graph as data
+```
+
+The script writes no file. It prints Mermaid to stdout and stops there, so put it in
+a fenced ` ```mermaid ` block in your reply. Claude Code and claude.ai both render that
+inline. Save a file or publish an Artifact only if the user asks for one. Every node
+is a file that exists, and every edge is a reference `spec_validator.py` also
+resolved via `build_graph()`, so the map and the CONFORMANT/NOT CONFORMANT verdict
+can't disagree. Dashed red edges are DANGLING_REFERENCE and PATH_ESCAPES_SKILL,
+drawn as arrows instead of text. Grey dashed nodes are ORPHANED_REFERENCE: bundled,
+but unreachable from SKILL.md.
+
+It does not draw a call graph between functions. The best published static Python
+call-graph tools land around 70% recall, so roughly three edges in ten go missing,
+and a diagram that's quietly incomplete is worse than no diagram at all. Everything
+here is checkable against `ls` and `grep` instead: files, links, and, with
+`--detail`, counts read straight off each script's AST.
 
 > **Scope note:** this skill's tier line-count minimums measure *legacy* skills. For authoring *new* skills, `engineering/write-a-skill` (SKILL.md under ~100 lines, Matt Pocock doctrine) is the binding standard — do not pad a new skill to satisfy a tier minimum here.
 
@@ -61,9 +91,10 @@ How this compares to `skills-ref`, `agent-ecosystem/skill-validator` and
 `agent-skills-lint` — including where those tools are ahead — is in
 [references/validator-comparison.md](references/validator-comparison.md).
 
-Both scripts are covered by tests: `python3 -m pytest tests/ -q` runs 117 checks,
+All three scripts are covered by tests: `python3 -m pytest tests/ -q` runs 131 checks,
 including adversarial fixtures that build deliberately broken skills and assert each
-defect is caught.
+defect is caught, plus a parity suite asserting `skill_mapper.py` and `spec_validator.py`
+report the same broken and orphaned files off the same graph.
 
 The authoritative rules and their sources are in
 [references/agent-skills-spec.md](references/agent-skills-spec.md). Scoring rubric detail
@@ -97,6 +128,12 @@ for d in path/to/skills/*/; do python3 scripts/skill_validator.py "$d"; done
 
 ### quality_scorer.py
 Four dimensions, 25% each: **Documentation** (depth, examples, references), **Code Quality** (complexity, error handling, output consistency), **Completeness** (required dirs, sample data, expected outputs), **Usability** (help text, example clarity). Outputs 0-100 + A-F grade + tier recommendation.
+
+### skill_mapper.py
+- File and reference graph, resolved by the same `build_graph()` spec_validator.py uses
+- Mermaid flowchart, grouped by directory; broken and unreachable references drawn as red/grey nodes
+- `--detail` reads each script's function/class counts and CLI flags off the AST, no call-graph guessing
+- `--json` for the same graph as data; past `--max-nodes` (default 40), oversized directories auto-collapse
 
 ## Tier Classification
 
