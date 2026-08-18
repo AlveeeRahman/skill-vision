@@ -16,6 +16,12 @@ measurements put the best static Python call-graph tools at roughly 70% recall, 
 third of real edges are missing and nothing on the diagram says which third. A map that
 is quietly incomplete is worse than no map. Everything here is checkable against `ls`.
 
+It does draw module-level import edges between scripts — `skill_mapper.py needs
+spec_validator.py` — because those are a literal AST fact (an Import/ImportFrom node
+naming a sibling file), not a resolved call target. Same accuracy bar as everything
+else, different question: not "what calls what" but "what fails to run if this file is
+missing."
+
 Standard library only. No network. Usage:
 
     python skill_mapper.py path/to/skill                  # Mermaid to stdout
@@ -70,9 +76,10 @@ def script_facts(path: Path) -> dict:
     """Top-level shape of a Python file, read straight from its AST.
 
     Only what the syntax tree states outright: how many functions and classes are
-    defined, and which flags argparse registers. No call resolution, no inference.
+    defined, which flags argparse registers, and which modules it imports. No call
+    resolution, no inference — `imports` is names as written, unresolved to a path.
     """
-    facts = {"functions": 0, "classes": 0, "flags": [], "parse_error": ""}
+    facts = {"functions": 0, "classes": 0, "flags": [], "imports": [], "parse_error": ""}
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
     except (OSError, SyntaxError, ValueError) as exc:
@@ -89,6 +96,12 @@ def script_facts(path: Path) -> dict:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str) \
                         and arg.value.startswith("--"):
                     facts["flags"].append(arg.value)
+        elif isinstance(node, ast.Import):
+            facts["imports"].extend(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.level == 0:      # skip "from . import x": no name to match
+                facts["imports"].append(node.module.split(".")[0])
+    facts["imports"] = sorted(set(facts["imports"]))
     return facts
 
 
@@ -130,7 +143,8 @@ def collect(root: Path, detail: bool = False) -> dict:
             add_node(edge.target,
                      "script" if target.suffix == ".py" else
                      "markdown" if target.suffix == ".md" else "asset")
-            edges.append({"source": edge.source, "target": edge.target, "status": "ok"})
+            edges.append({"source": edge.source, "target": edge.target, "status": "ok",
+                         "kind": "doc"})
         elif edge.status in ("dangling", "escapes"):
             add_node(edge.source, "markdown")
             missing.append({"source": edge.source, "raw": edge.raw, "status": edge.status})
@@ -173,10 +187,36 @@ def collect(root: Path, detail: bool = False) -> dict:
                   if f.is_file() and not any(j in f.parts for j in JUNK_PATTERNS)
                   and f.name != ".DS_Store")
 
-    if detail:
-        for rel, node in nodes.items():
-            if node["kind"] == "script":
-                node["facts"] = script_facts(root / rel)
+    # Import edges answer "what needs what to run" — a question doc links can't, since a
+    # script that imports a sibling is never required to link to it in prose. Resolved
+    # by module name against scripts in the *same directory only*, matching the
+    # sys.path.insert(0, own-dir) convention these flat script folders actually use —
+    # matching repo-wide would risk pairing a stdlib/third-party name with an unrelated
+    # local file of the same name.
+    facts_by_path = {rel: script_facts(root / rel)
+                     for rel, node in nodes.items() if node["kind"] == "script"}
+    for rel, node in nodes.items():
+        if node["kind"] == "script":
+            node["facts"] = facts_by_path[rel]
+
+    code_edges = []
+    by_dir: dict = {}
+    for rel in facts_by_path:
+        by_dir.setdefault(str(Path(rel).parent), {})[Path(rel).stem] = rel
+    for rel, facts in facts_by_path.items():
+        if facts.get("parse_error"):
+            continue
+        siblings = by_dir.get(str(Path(rel).parent), {})
+        for name in facts["imports"]:
+            target = siblings.get(name)
+            if target and target != rel:
+                code_edges.append({"source": rel, "target": target, "status": "ok",
+                                   "kind": "code"})
+    edges.extend(code_edges)
+
+    if not detail:
+        for node in nodes.values():
+            node.pop("facts", None)
 
     return {
         "skill": root.name,
@@ -188,7 +228,8 @@ def collect(root: Path, detail: bool = False) -> dict:
         "counts": {
             "files": len(nodes),
             "files_on_disk": on_disk,
-            "links": len(edges),
+            "links": len(edges) - len(code_edges),
+            "code_deps": len(code_edges),
             "broken_links": len(missing),
             "stranded": sum(1 for n in nodes.values() if n.get("stranded")),
         },
@@ -254,18 +295,27 @@ def render_mermaid(model: dict, direction: str = "TD",
                    f'{"outside the skill" if miss["status"] == "escapes" else "missing"}"]')
 
     seen = set()
+    link_index = 0
+    code_link_indices = []
     for edge in model["edges"]:
         if edge["source"] not in shown and edge["source"] != "SKILL.md":
             continue
         if edge["target"] not in shown:
             continue
-        key = (edge["source"], edge["target"])
+        kind = edge.get("kind", "doc")
+        key = (edge["source"], edge["target"], kind)
         if key in seen:
             continue
         seen.add(key)
-        out.append(f'  {_node_id(edge["source"])} --> {_node_id(edge["target"])}')
+        if kind == "code":
+            out.append(f'  {_node_id(edge["source"])} ==>|needs| {_node_id(edge["target"])}')
+            code_link_indices.append(link_index)
+        else:
+            out.append(f'  {_node_id(edge["source"])} --> {_node_id(edge["target"])}')
+        link_index += 1
     for i, miss in enumerate(model["missing"]):
         out.append(f'  {_node_id(miss["source"])} -.-> {_node_id("missing_%d" % i)}')
+        link_index += 1
 
     stranded = [n for n in nodes.values()
                 if n.get("stranded") and n["path"] in shown and n["path"] != "SKILL.md"]
@@ -281,6 +331,9 @@ def render_mermaid(model: dict, direction: str = "TD",
     if model["missing"]:
         out.append("  class " + ",".join(_node_id("missing_%d" % i)
                                          for i in range(len(model["missing"]))) + " broken")
+    if code_link_indices:
+        out.append("  linkStyle " + ",".join(str(i) for i in code_link_indices)
+                   + " stroke:#2563eb,stroke-width:2px")
     return "\n".join(out), notices
 
 
@@ -319,6 +372,7 @@ def main() -> int:
 
     counts = model["counts"]
     summary = (f"{counts['files']} files mapped · {counts['links']} resolved links · "
+               f"{counts['code_deps']} code dependencies · "
                f"{counts['broken_links']} broken · "
                f"{counts['stranded']} stranded from SKILL.md")
     print(f"\n{summary}", file=sys.stderr)

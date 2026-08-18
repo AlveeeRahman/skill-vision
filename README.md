@@ -87,23 +87,27 @@ flowchart TD
         skill_validator_py["skill_validator.py"]
         script_tester_py["script_tester.py"]
         quality_scorer_py["quality_scorer.py"]
+        security_scorer_py["security_scorer.py"]
     end
     subgraph references["references/"]
         agent_skills_spec_md["agent-skills-spec.md"]
         validator_comparison_md["validator-comparison.md"]
     end
-    SKILL_md --> skill_mapper_py
-    SKILL_md --> spec_validator_py
+    SKILL_md --> agent_skills_spec_md
     SKILL_md --> skill_validator_py
     SKILL_md --> script_tester_py
     SKILL_md --> quality_scorer_py
-    SKILL_md --> agent_skills_spec_md
+    SKILL_md --> security_scorer_py
+    SKILL_md --> skill_mapper_py
     agent_skills_spec_md --> spec_validator_py
+    quality_scorer_py ==>|needs| security_scorer_py
+    skill_mapper_py ==>|needs| spec_validator_py
     classDef entry fill:#f59e0b,stroke:#b45309,color:#1f2937
     class SKILL_md entry
+    linkStyle 7,8 stroke:#2563eb,stroke-width:2px
 ```
 
-*(Trimmed to the scripts and one reference for a README-sized example. The full run covers all 28 files this skill ships and prints a summary line with the exact file, link, and orphan counts to stderr.)* Nodes are grouped by directory, the amber box is always SKILL.md, and anything drawn in grey-dashed or red is exactly what `spec_validator.py` would flag too. It's the same check, just drawn instead of printed.
+*(Trimmed to the scripts and one reference for a README-sized example. The full run covers all 28 files this skill ships and prints a summary line with the exact file, link, code-dependency, and orphan counts to stderr.)* Nodes are grouped by directory, the amber box is always SKILL.md, and anything drawn in grey-dashed or red is exactly what `spec_validator.py` would flag too — same check, just drawn instead of printed. The thin arrows are doc references (SKILL.md and friends pointing at a file); the thick blue `needs` arrows are a second, independent signal — `import`/`from` statements read straight from each script's AST, showing which scripts actually require which other scripts to run. A file can be documented without being imported, or imported without ever being linked in prose; the diagram now shows both.
 
 ## Why skill-vision, and not another "skill-tester"?
 

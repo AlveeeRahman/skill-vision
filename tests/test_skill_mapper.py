@@ -173,6 +173,52 @@ class SkillMapperTestCase(unittest.TestCase):
         node = next(n for n in model["nodes"] if n["path"] == "scripts/broken.py")
         self.assertTrue(node["facts"]["parse_error"])
 
+    # --- code edges: import statements are AST facts, unlike call graphs -------
+
+    def test_import_edge_drawn_between_sibling_scripts(self):
+        root = build(self.tmp, "s", GOOD_FM,
+                     files={"scripts/mapper.py": "from helper import thing\n",
+                            "scripts/helper.py": "thing = 1\n"})
+        model = sm.collect(root)
+        code_edges = [e for e in model["edges"] if e["kind"] == "code"]
+        self.assertEqual(code_edges,
+                         [{"source": "scripts/mapper.py", "target": "scripts/helper.py",
+                           "status": "ok", "kind": "code"}])
+        self.assertEqual(model["counts"]["code_deps"], 1)
+
+    def test_import_edge_not_drawn_across_directories(self):
+        # These flat script folders resolve local imports via sys.path.insert(0, own
+        # dir), so a same-named file in a different directory is not what "import
+        # helper" actually reaches — matching it would be a false edge.
+        root = build(self.tmp, "s", GOOD_FM,
+                     files={"scripts/mapper.py": "import helper\n",
+                            "other/helper.py": "x = 1\n"})
+        model = sm.collect(root)
+        self.assertEqual([e for e in model["edges"] if e["kind"] == "code"], [])
+
+    def test_stdlib_import_does_not_fabricate_an_edge(self):
+        root = build(self.tmp, "s", GOOD_FM, files={"scripts/tool.py": "import json\n"})
+        model = sm.collect(root)
+        self.assertEqual([e for e in model["edges"] if e["kind"] == "code"], [])
+
+    def test_facts_available_for_code_edges_even_without_detail(self):
+        # Import edges are structural, not decoration, so they must not require --detail
+        # — but the fn/cls/flags annotation stays detail-gated, so facts don't leak.
+        root = build(self.tmp, "s", GOOD_FM,
+                     files={"scripts/mapper.py": "from helper import thing\n",
+                            "scripts/helper.py": "thing = 1\n"})
+        model = sm.collect(root, detail=False)
+        self.assertEqual(model["counts"]["code_deps"], 1)
+        self.assertTrue(all("facts" not in n for n in model["nodes"]))
+
+    def test_code_edge_rendered_with_needs_label_and_distinct_style(self):
+        root = build(self.tmp, "s", GOOD_FM,
+                     files={"scripts/mapper.py": "from helper import thing\n",
+                            "scripts/helper.py": "thing = 1\n"})
+        diagram, _ = sm.render_mermaid(sm.collect(root))
+        self.assertIn("n_scripts_mapper_py ==>|needs| n_scripts_helper_py", diagram)
+        self.assertIn("linkStyle", diagram)
+
     # --- CLI surface -----------------------------------------------------------
 
     def test_missing_skill_md_is_a_clean_error_not_a_traceback(self):
