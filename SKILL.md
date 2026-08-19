@@ -54,9 +54,11 @@ guides. Mark a block quoting another project's commands with
 `<!-- claim-audit: ignore-next-block -->` and it is skipped.
 
 For the judgement-shaped half — stale versions, misattributed citations, unsourced
-numbers, instructions that cannot be followed — `agents/hallucination-hunter.md` is a
-subagent that runs these tools first and investigates only what they could not decide.
-Copy it into `.claude/agents/` to use it.
+numbers, instructions that cannot be followed — [agents/hallucination-hunter.md](agents/hallucination-hunter.md)
+is a subagent that runs these tools first and investigates only what they could not
+decide. Every finding carries the claim as written, where it is written, and the
+specific fact that contradicts it; anything it cannot settle comes back as UNVERIFIED
+rather than as a finding. Copy it into `.claude/agents/` to use it.
 
 ## See the codebase, not just the verdict
 
