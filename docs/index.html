@@ -3,13 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Skill Vision — the Claude skill evaluator and scorer</title>
-<meta name="description" content="Skill Vision is a QA skill for Claude Code: validate Agent Skills against the spec, test bundled scripts, score quality A+ to F, check security posture, draw the skill as a Mermaid flowchart, and see each skill's token cost — before you ship.">
+<title>Skill Vision: a Claude Agent Skill validator</title>
+<meta name="description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.">
 <link rel="canonical" href="https://alveeerahman.github.io/skill-vision/">
-<meta property="og:title" content="Skill Vision — the Claude skill evaluator and scorer">
-<meta property="og:description" content="Validate, test, and score Agent Skills for Claude Code and claude.ai: spec conformance, script testing, quality grades, security posture, a Mermaid codebase map, and per-skill token cost.">
-<meta property="og:url" content="https://alveeerahman.github.io/skill-vision/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Skill Vision">
+<meta property="og:title" content="Skill Vision: a Claude Agent Skill validator">
+<meta property="og:description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.">
+<meta property="og:url" content="https://alveeerahman.github.io/skill-vision/">
+<meta property="og:image" content="https://alveeerahman.github.io/skill-vision/assets/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Skill Vision: a Claude Agent Skill validator">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Skill Vision",
+  "description": "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.",
+  "url": "https://alveeerahman.github.io/skill-vision/",
+  "codeRepository": "https://github.com/AlveeeRahman/skill-vision",
+  "programmingLanguage": "Python",
+  "runtimePlatform": "Claude Code (Agent Skills)",
+  "license": "https://github.com/AlveeeRahman/skill-vision/blob/HEAD/LICENSE",
+  "version": "1.1.1",
+  "dateModified": "2026-08-18",
+  "author": {
+    "@type": "Person",
+    "name": "Alvee Rahman",
+    "url": "https://github.com/AlveeeRahman"
+  }
+}
+</script>
 <style>
   :root { --ink:#1f2937; --sub:#4b5563; --line:#e5e7eb; --accent:#1d4ed8; --bg:#ffffff; --code:#f3f4f6; }
   @media (prefers-color-scheme: dark) {
@@ -29,13 +55,14 @@
   table { border-collapse: collapse; width:100%; font-size:.92rem; }
   th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); }
   .cta { display:inline-block; margin:.8rem .6rem 0 0; padding:.55rem 1rem; border:1px solid var(--accent); border-radius:8px; text-decoration:none; font-weight:600; }
+  ul { padding-left: 1.2rem; }
   footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--sub); font-size:.9rem; }
 </style>
 </head>
 <body>
 <main>
   <h1>👀 Skill Vision</h1>
-  <p class="sub"><strong>The Claude skill evaluator and scorer.</strong> An Agent Skill for Claude Code that inspects your <em>other</em> skills before they ship — spec conformance, script testing, quality grades, security posture, a Mermaid codebase map, and per-skill token cost.</p>
+  <p class="sub"><strong>A Claude Agent Skill validator.</strong> An Agent Skill for Claude Code that inspects your <em>other</em> skills before they ship — spec conformance, script testing, documentation claims, quality grades, security posture, a Mermaid codebase map, and per-skill token cost.</p>
 
   <p>
     <a class="cta" href="https://github.com/AlveeeRahman/skill-vision">GitHub repository</a>
@@ -44,9 +71,9 @@
 
   <h2>Install as a Claude Code skill</h2>
   <pre><code>git clone https://github.com/AlveeeRahman/skill-vision.git ~/.claude/skills/skill-vision</code></pre>
-  <p>That's the whole install — Python 3.9+, zero dependencies. Then ask Claude in your own words: <em>"validate my skill"</em>, <em>"score the quality of my skill"</em>, <em>"is this skill ready to upload to claude.ai?"</em></p>
+  <p>That's the whole install — Python 3.9+, zero dependencies, and no bundled script opens a network connection. Then ask Claude in your own words: <em>"validate my skill"</em>, <em>"score the quality of my skill"</em>, <em>"is this skill ready to upload to claude.ai?"</em></p>
 
-  <h2>Five independent inspections, plus a map</h2>
+  <h2>What a Claude Agent Skill validator has to check</h2>
   <table>
     <tr><th>Tool</th><th>Question it answers</th></tr>
     <tr><td><code>spec_validator.py</code></td><td>Does the skill load, upload, and trigger per the Agent Skills spec? What does it cost in context tokens?</td></tr>
@@ -54,6 +81,7 @@
     <tr><td><code>script_tester.py</code></td><td>Do the bundled scripts actually run — including nested packages?</td></tr>
     <tr><td><code>quality_scorer.py</code></td><td>Five-dimension quality score with an A+ to F grade and an improvement roadmap.</td></tr>
     <tr><td><code>security_scorer.py</code></td><td>Security posture — credentials, injection, path traversal — with false-positive-hardened detectors.</td></tr>
+    <tr><td><code>claim_auditor.py</code></td><td>Does the documentation match the code? Structure and truth fail independently: a skill can conform to the spec and still document a flag its own parser never defines, or claim a script runs offline when it shells out to one that does not.</td></tr>
     <tr><td><code>skill_mapper.py</code></td><td>What's actually in the skill, and what can Claude reach from SKILL.md? Draws the skill's files and reference graph as a Mermaid flowchart, off the exact same resolver <code>spec_validator.py</code> uses to check links — so the map and the verdict can't disagree.</td></tr>
   </table>
   <p>Every tool is a plain stdlib CLI with <code>--json</code> output and CI-friendly exit codes, so pipelines can run the same inspections without Claude in the loop. Where the spec and house opinion disagree, <strong>the spec wins</strong> — Skill Vision never asks you to pad a concise skill.</p>
@@ -64,6 +92,17 @@
   <h2>Token cost, visible</h2>
   <pre><code>=== skill-vision  [tool] · ~2.6k tokens (description 115 every session + body 2.5k on trigger) ===</code></pre>
   <p>Every report header states what a skill costs in context — description tokens load every session, body tokens on trigger — so heavy skills are visible at a glance.</p>
+
+  <h2 id="project-resources">Project resources</h2>
+  <ul>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision">Source repository</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/releases">Releases and changelog</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/SECURITY.md">Security policy</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/CONTRIBUTING.md">Contributing guide</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/tree/HEAD/assets/sample-skill">A sample skill to validate against</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/tree/HEAD/expected_outputs">Expected validator output</a></li>
+  </ul>
+  <p>Part of a three-skill suite: <strong>Skill Vision</strong> (this page) · <a href="https://alveeerahman.github.io/agent-oracle/">Agent Oracle</a> · <a href="https://alveeerahman.github.io/research-hound/">Research Hound</a></p>
 
   <footer>
     MIT licensed · <a href="https://github.com/AlveeeRahman/skill-vision">github.com/AlveeeRahman/skill-vision</a> · Who checks the checker? Skill Vision checks itself in CI on every push.

@@ -1,0 +1,87 @@
+# What this repository says about itself, in one place.
+#
+# This is a record, not a contract: no script reads it and no CI job enforces it.
+# It exists so that the next person -- or the next agent -- changing the repository
+# description, the topics, the README opening or the Pages <head> has one file to read
+# instead of reverse-engineering the intent from three places.
+#
+# When you change a fact here, change it in the places listed under `appears_in` too.
+
+schema_version: 1
+repository: AlveeeRahman/skill-vision
+name: Skill Vision
+
+canonical_url: https://alveeerahman.github.io/skill-vision/
+sitemap_url: https://alveeerahman.github.io/skill-vision/sitemap.xml
+
+# One precise phrase. It belongs in the title, the opening paragraph, one heading and
+# the repository description -- once each, not repeated for its own sake.
+primary_keyword: "Claude Agent Skill validator"
+
+title: "Skill Vision: a Claude Agent Skill validator"
+description: "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost."
+
+version: "1.1.1"
+license_spdx: MIT
+programming_language: Python
+runtime_platform: Claude Code (Agent Skills)
+author:
+  name: Alvee Rahman
+  url: https://github.com/AlveeeRahman
+
+# Seven CLIs under scripts/. The Pages site listed six and omitted claim_auditor.py,
+# which both sibling repositories run in their own CI.
+runnable_scripts: 7
+
+# The CI matrix runs every version listed here.
+supported_python:
+  - "3.9"
+  - "3.10"
+  - "3.11"
+  - "3.12"
+  - "3.13"
+
+# Nothing under scripts/ opens a connection, and there are no third-party imports.
+network_surfaces: []
+
+# GitHub allows 20. Lowercase words separated by hyphens, describing what the software
+# is rather than how good it is. best-claude-skills and must-have-skills were dropped
+# for promoting rather than describing; codebase-mapping and mermaid-codebase were
+# duplicates of codebase-map and mermaid.
+topics:
+  - agent-skills
+  - ai-agents
+  - claude-ai
+  - claude-code
+  - claude-code-skills
+  - claude-skills
+  - codebase-map
+  - developer-tools
+  - mermaid
+  - python
+  - quality-assurance
+  - security-scanning
+  - skill-testing
+  - skill-validation
+  - skill-validator
+  - static-analysis
+
+# 1280x640, the size GitHub asks for. docs/assets/social-preview.svg is the editable
+# source.
+social_preview: docs/assets/social-preview.png
+
+suite:
+  - name: Skill Vision
+    url: https://alveeerahman.github.io/skill-vision/
+  - name: Agent Oracle
+    url: https://alveeerahman.github.io/agent-oracle/
+  - name: Research Hound
+    url: https://alveeerahman.github.io/research-hound/
+
+# The files that repeat the facts above. Keep them in step by hand.
+appears_in:
+  - README.md
+  - SKILL.md
+  - docs/index.html
+  - docs/sitemap.xml
+  - github.com repository description, homepage and topics

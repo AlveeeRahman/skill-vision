@@ -1,11 +1,15 @@
-# Skill Vision: the QA skill for Claude skills
+# Skill Vision: a Claude Agent Skill validator
 
 [![CI](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![Zero runtime dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#%EF%B8%8F-under-the-hood-the-five-validators)
 
-**skill-vision** is an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude *"validate my skill"* and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
+**Documentation**: [alveeerahman.github.io/skill-vision](https://alveeerahman.github.io/skill-vision/) ·
+part of a three-skill suite with [Agent Oracle](https://alveeerahman.github.io/agent-oracle/)
+and [Research Hound](https://alveeerahman.github.io/research-hound/).
+
+**skill-vision** is a Claude Agent Skill validator — an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude *"validate my skill"* and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
 
 ## ⚓ Get it aboard
 
