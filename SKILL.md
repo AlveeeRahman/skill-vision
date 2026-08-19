@@ -1,6 +1,6 @@
 ---
 name: skill-vision
-description: "Validate, test, and score the quality of Agent Skills for Claude Code and claude.ai. Comprehensive meta-skill: structure validation, Python script testing (syntax + imports + runtime + output format), multi-dimensional quality scoring with letter grades and tier classification (BASIC/STANDARD/POWERFUL). Use when authoring a new skill, auditing existing skills for tier promotion, setting up pre-commit hooks for skill quality, or integrating skill QA into CI."
+description: "Validate, test and score Claude Agent Skills: spec conformance, script testing, quality grade, security, token cost. Use when authoring or auditing a skill, or before uploading one to claude.ai."
 metadata:
   version: "1.1.1"
 ---
