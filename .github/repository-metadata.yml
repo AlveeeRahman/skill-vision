@@ -19,7 +19,7 @@ sitemap_url: https://alveeerahman.github.io/skill-vision/sitemap.xml
 primary_keyword: "Claude Agent Skill validator"
 
 title: "Skill Vision: a Claude Agent Skill validator"
-description: "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost."
+description: "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scores, a Mermaid map, and a hallucination-hunting subagent."
 
 version: "1.1.1"
 license_spdx: MIT
@@ -40,6 +40,12 @@ supported_python:
   - "3.11"
   - "3.12"
   - "3.13"
+
+# Not a script, so not counted above: agents/hallucination-hunter.md is a subagent for
+# the claims a deterministic check cannot settle. SKILL.md links it directly, which is
+# what puts it on the path Claude follows under progressive disclosure.
+subagents:
+  - agents/hallucination-hunter.md
 
 # Nothing under scripts/ opens a connection, and there are no third-party imports.
 network_surfaces: []

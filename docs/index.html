@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skill Vision: a Claude Agent Skill validator</title>
-<meta name="description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.">
+<meta name="description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scores, a Mermaid map, and a hallucination-hunting subagent.">
 <link rel="canonical" href="https://alveeerahman.github.io/skill-vision/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Skill Vision">
 <meta property="og:title" content="Skill Vision: a Claude Agent Skill validator">
-<meta property="og:description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.">
+<meta property="og:description" content="A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scores, a Mermaid map, and a hallucination-hunting subagent.">
 <meta property="og:url" content="https://alveeerahman.github.io/skill-vision/">
 <meta property="og:image" content="https://alveeerahman.github.io/skill-vision/assets/social-preview.png">
 <meta property="og:image:width" content="1280">
@@ -21,7 +21,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "Skill Vision",
-  "description": "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost.",
+  "description": "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scores, a Mermaid map, and a hallucination-hunting subagent.",
   "url": "https://alveeerahman.github.io/skill-vision/",
   "codeRepository": "https://github.com/AlveeeRahman/skill-vision",
   "programmingLanguage": "Python",
@@ -62,7 +62,7 @@
 <body>
 <main>
   <h1>👀 Skill Vision</h1>
-  <p class="sub"><strong>A Claude Agent Skill validator.</strong> An Agent Skill for Claude Code that inspects your <em>other</em> skills before they ship — spec conformance, script testing, documentation claims, quality grades, security posture, a Mermaid codebase map, and per-skill token cost.</p>
+  <p class="sub"><strong>A Claude Agent Skill validator.</strong> An Agent Skill for Claude Code that inspects your <em>other</em> skills before they ship — spec conformance, script testing, documentation claims, quality grades, security posture, a Mermaid codebase map, per-skill token cost, and a hallucination-hunting subagent for the claims no script can settle.</p>
 
   <p>
     <a class="cta" href="https://github.com/AlveeeRahman/skill-vision">GitHub repository</a>
@@ -83,6 +83,7 @@
     <tr><td><code>security_scorer.py</code></td><td>Security posture — credentials, injection, path traversal — with false-positive-hardened detectors.</td></tr>
     <tr><td><code>claim_auditor.py</code></td><td>Does the documentation match the code? Structure and truth fail independently: a skill can conform to the spec and still document a flag its own parser never defines, or claim a script runs offline when it shells out to one that does not.</td></tr>
     <tr><td><code>skill_mapper.py</code></td><td>What's actually in the skill, and what can Claude reach from SKILL.md? Draws the skill's files and reference graph as a Mermaid flowchart, off the exact same resolver <code>spec_validator.py</code> uses to check links — so the map and the verdict can't disagree.</td></tr>
+    <tr><td><code>agents/hallucination-hunter.md</code><br><em>a subagent, not a script</em></td><td>The judgement half: stale versions, misattributed citations, unsourced numbers, instructions that cannot be followed. Runs the deterministic tools first and works only their <code>UNVERIFIED</code> list.</td></tr>
   </table>
   <p>Every tool is a plain stdlib CLI with <code>--json</code> output and CI-friendly exit codes, so pipelines can run the same inspections without Claude in the loop. Where the spec and house opinion disagree, <strong>the spec wins</strong> — Skill Vision never asks you to pad a concise skill.</p>
 
@@ -93,12 +94,18 @@
   <pre><code>=== skill-vision  [tool] · ~2.6k tokens (description 115 every session + body 2.5k on trigger) ===</code></pre>
   <p>Every report header states what a skill costs in context — description tokens load every session, body tokens on trigger — so heavy skills are visible at a glance.</p>
 
+  <h2 id="hallucination-hunter">Where the scripts stop</h2>
+  <p>Every tool above is deterministic: it can prove that a documented flag does not exist, that a script reaches the network, that a count does not match the tree. What it cannot do is tell you a cited paper does not say what it is cited for, that a version number went stale last quarter, or that a benchmark figure has no source. Those need judgement — and judgement is exactly where a model hallucinates.</p>
+  <p><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/agents/hallucination-hunter.md"><code>agents/hallucination-hunter.md</code></a> is a subagent for that half, built to make guessing expensive. It runs the four tools first and treats <code>claim_auditor.py</code>'s <code>UNVERIFIED</code> items as its worklist, rather than reading prose and forming impressions. One rule governs it: <strong>every finding names the claim, where it is written, and the specific fact that contradicts it.</strong> If it cannot produce that fact, the result is reported as UNVERIFIED rather than as a finding — reporting a suspicion as a defect is itself a hallucination. It reports; it does not fix. And it closes by stating what it did <em>not</em> check, because a report implying coverage it never achieved is the same failure in a different costume.</p>
+  <p>Copy it into <code>.claude/agents/</code> to use it.</p>
+
   <h2 id="project-resources">Project resources</h2>
   <ul>
     <li><a href="https://github.com/AlveeeRahman/skill-vision">Source repository</a></li>
     <li><a href="https://github.com/AlveeeRahman/skill-vision/releases">Releases and changelog</a></li>
     <li><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/SECURITY.md">Security policy</a></li>
     <li><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/CONTRIBUTING.md">Contributing guide</a></li>
+    <li><a href="https://github.com/AlveeeRahman/skill-vision/blob/HEAD/agents/hallucination-hunter.md">The hallucination-hunter subagent</a></li>
     <li><a href="https://github.com/AlveeeRahman/skill-vision/tree/HEAD/assets/sample-skill">A sample skill to validate against</a></li>
     <li><a href="https://github.com/AlveeeRahman/skill-vision/tree/HEAD/expected_outputs">Expected validator output</a></li>
   </ul>

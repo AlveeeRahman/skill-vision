@@ -11,6 +11,26 @@ and [Research Hound](https://alveeerahman.github.io/research-hound/).
 
 **skill-vision** is a Claude Agent Skill validator — an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude *"validate my skill"* and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
 
+## What's in it
+
+| Feature | What it answers | Runs as |
+| --- | --- | --- |
+| **Spec conformance** | Will this skill load, upload and trigger, by the letter of the Agent Skills spec? | `scripts/spec_validator.py` |
+| **Token cost** | What does this skill cost in context — description tokens every session, body tokens on trigger? | `scripts/spec_validator.py` |
+| **Structure & docs** | Is the layout sound and the documentation complete? | `scripts/skill_validator.py` |
+| **Script execution** | Do the bundled scripts actually run, including nested packages? | `scripts/script_tester.py` |
+| **Quality score** | Five dimensions, an A+ to F grade, and an ordered roadmap of what to fix first. | `scripts/quality_scorer.py` |
+| **Security posture** | Credentials, injection, path traversal — with detectors hardened against false positives. | `scripts/security_scorer.py` |
+| **Documentation truth** | Do the docs match the code? Traces "runs offline" claims *through* spawned scripts. | `scripts/claim_auditor.py` |
+| **Codebase map** | What is actually in the skill, and what can Claude reach from SKILL.md? Draws it as Mermaid. | `scripts/skill_mapper.py` |
+| **Hallucination hunting** | Stale versions, misattributed citations, unsourced numbers, instructions that cannot be followed — the judgement half no script can settle. | [`agents/hallucination-hunter.md`](agents/hallucination-hunter.md) — a subagent |
+
+Everything above is stdlib-only Python 3.9+, with `--json` on every tool and CI-friendly
+exit codes, so a pipeline can run the same inspections with no model in the loop. No
+bundled script opens a network connection. The validators are covered by 196 adversarial
+tests, including a parity suite proving the map and the spec verdict cannot drift apart,
+and false-positive fixtures asserting that a correct skill produces no findings.
+
 ## ⚓ Get it aboard
 
 ```bash
@@ -56,7 +76,7 @@ And it checks whether its own docs are telling the truth:
 
 ## How it works
 
-Your skill passes through six independent inspections, plus one that draws a picture instead of a verdict:
+Your skill passes through six independent inspections, one that draws a picture instead of a verdict, and a subagent for the questions no script can settle:
 
 ```mermaid
 flowchart LR
@@ -70,58 +90,97 @@ flowchart LR
         tester --> quality["quality_scorer<br/>5-dimension score"]
         quality --> security["security_scorer<br/>risk posture"]
     end
+    subgraph TRUTH["Truth: do the docs match the code?"]
+        auditor["claim_auditor<br/>prose vs behaviour<br/>offline claims traced<br/>through spawned scripts"]
+    end
+    subgraph AGENT["Judgement: what no script can settle"]
+        hunter["🔍 hallucination-hunter<br/>a subagent, not a script<br/>stale versions · misattributed<br/>citations · unsourced numbers"]
+    end
     spec --> house
+    spec --> auditor
     spec -.shares its graph with.-> mapper["skill_mapper<br/>same files, same links,<br/>drawn not scored"]
     security --> verdict{{"👀 Verdict<br/>CONFORMANT or not<br/>grade A+ to F · ~tokens"}}
+    auditor --> verdict
     mapper --> picture(["🗺️ the skill,<br/>as a Mermaid flowchart"])
+    auditor -.hands over its UNVERIFIED list.-> hunter
+    hunter --> report(["📋 findings that carry evidence<br/>· and a list of what it did not check"])
     classDef specStyle fill:#f59e0b,stroke:#b45309,color:#1f2937
     classDef houseStyle fill:#3b82f6,stroke:#1d4ed8,color:#ffffff
+    classDef truthStyle fill:#14b8a6,stroke:#0f766e,color:#1f2937
     classDef verdictStyle fill:#22c55e,stroke:#15803d,color:#1f2937
     classDef mapStyle fill:#8b5cf6,stroke:#6d28d9,color:#ffffff
+    classDef agentStyle fill:#ec4899,stroke:#be185d,color:#ffffff
     class spec specStyle
     class house,tester,quality,security houseStyle
+    class auditor truthStyle
     class verdict verdictStyle
     class mapper,picture mapStyle
+    class hunter,report agentStyle
 ```
 
 The amber gate is binding. `scripts/spec_validator.py` rules on the letter of the Agent Skills spec, the rules that decide whether a skill actually loads, uploads, and triggers. It also reports each skill's estimated context cost (description tokens load every session, body tokens load on trigger, the way Claude Code's own doctor counts them). The blue chain is advisory: structure and docs, script execution (recursive, with nested `scripts/` packages included), a five-dimension score with letter grade, and security posture. Where spec and house opinion disagree, **the spec wins**. Skill-vision never asks you to pad a concise skill to satisfy someone's style guide.
 
 The purple branch doesn't score anything. `scripts/skill_mapper.py` reuses the exact graph `spec_validator.py` already built to check links: same files, same resolved paths, same broken and orphaned ones. It draws that graph as a flowchart instead of a findings list. Ask Claude *"show me this skill's codebase as a flowchart"* and that's what runs.
 
+The pink branch is the only part that is not a script. [`agents/hallucination-hunter.md`](agents/hallucination-hunter.md) is a subagent, and it exists because the deterministic tools stop at a real boundary: `claim_auditor.py` can prove that a documented flag does not exist, but it cannot tell you that a cited paper does not say what it is cited for, that a version number went stale last quarter, or that a benchmark figure has no source. Those need judgement, and judgement is where a model hallucinates.
+
+So the agent is built to make that expensive. It runs the four tools **first**, treats the auditor's `UNVERIFIED` items as its worklist rather than starting from impressions, and is bound by one rule: every finding names the claim, where it is written, and the specific contradicting fact. If it cannot produce that fact, the finding is reported as UNVERIFIED rather than as a finding — because reporting a suspicion as a defect is itself a hallucination. It reports; it does not fix. And it ends by stating what it did *not* check, since a report that implies coverage it never achieved is the same failure wearing a different costume.
+
 ### What that flowchart looks like
 
-Genuine output, `python3 scripts/skill_mapper.py .` on this repository:
+Genuine output, `python3 scripts/skill_mapper.py .` on this repository, trimmed to the
+scripts, one reference and the agent so it fits a README:
 
 ```mermaid
 flowchart TD
-    SKILL_md["SKILL.md<br/>~3.4k tokens on trigger"]
-    subgraph scripts["scripts/"]
-        skill_mapper_py["skill_mapper.py"]
-        spec_validator_py["spec_validator.py"]
-        skill_validator_py["skill_validator.py"]
-        script_tester_py["script_tester.py"]
-        quality_scorer_py["quality_scorer.py"]
-        security_scorer_py["security_scorer.py"]
-    end
-    subgraph references["references/"]
-        agent_skills_spec_md["agent-skills-spec.md"]
-        validator_comparison_md["validator-comparison.md"]
-    end
-    SKILL_md --> agent_skills_spec_md
-    SKILL_md --> skill_validator_py
-    SKILL_md --> script_tester_py
-    SKILL_md --> quality_scorer_py
-    SKILL_md --> security_scorer_py
-    SKILL_md --> skill_mapper_py
-    agent_skills_spec_md --> spec_validator_py
-    quality_scorer_py ==>|needs| security_scorer_py
-    skill_mapper_py ==>|needs| spec_validator_py
-    classDef entry fill:#f59e0b,stroke:#b45309,color:#1f2937
-    class SKILL_md entry
-    linkStyle 7,8 stroke:#2563eb,stroke-width:2px
+  n_SKILL_md["SKILL.md<br/>~3.5k tokens on trigger"]
+  subgraph n_g_scripts["scripts/"]
+    n_scripts_claim_auditor_py["claim_auditor.py"]
+    n_scripts_quality_scorer_py["quality_scorer.py"]
+    n_scripts_script_tester_py["script_tester.py"]
+    n_scripts_security_scorer_py["security_scorer.py"]
+    n_scripts_skill_mapper_py["skill_mapper.py"]
+    n_scripts_skill_validator_py["skill_validator.py"]
+    n_scripts_spec_validator_py["spec_validator.py"]
+  end
+  subgraph n_g_references["references/"]
+    n_references_agent_skills_spec_md["agent-skills-spec.md"]
+  end
+  subgraph n_g_agents["agents/"]
+    n_agents_hallucination_hunter_md["hallucination-hunter.md"]
+  end
+  n_SKILL_md --> n_agents_hallucination_hunter_md
+  n_SKILL_md --> n_references_agent_skills_spec_md
+  n_SKILL_md --> n_scripts_spec_validator_py
+  n_SKILL_md --> n_scripts_claim_auditor_py
+  n_SKILL_md --> n_scripts_skill_validator_py
+  n_SKILL_md --> n_scripts_script_tester_py
+  n_SKILL_md --> n_scripts_quality_scorer_py
+  n_SKILL_md --> n_scripts_security_scorer_py
+  n_SKILL_md --> n_scripts_skill_mapper_py
+  n_scripts_claim_auditor_py ==>|needs| n_scripts_spec_validator_py
+  n_scripts_quality_scorer_py ==>|needs| n_scripts_security_scorer_py
+  n_scripts_quality_scorer_py ==>|needs| n_scripts_spec_validator_py
+  n_scripts_skill_mapper_py ==>|needs| n_scripts_spec_validator_py
+  classDef entry fill:#f59e0b,stroke:#b45309,color:#1f2937
+  class n_SKILL_md entry
+  linkStyle 9,10,11,12 stroke:#2563eb,stroke-width:2px
 ```
 
-*(Trimmed to the scripts and one reference for a README-sized example. The full run covers all 31 files this skill ships and prints a summary line with the exact file, link, code-dependency, and orphan counts to stderr.)* Nodes are grouped by directory, the amber box is always SKILL.md, and anything drawn in grey-dashed, amber or red is exactly what `spec_validator.py` would flag too, the same check drawn instead of printed. The thin arrows are doc references, meaning SKILL.md and friends pointing at a file. The thick blue `needs` arrows are a second, independent signal: `import`/`from` statements read straight from each script's AST, showing which scripts actually require which other scripts to run. A file can be documented without being imported, or imported without ever being linked in prose, and the diagram shows both.
+The full run covers all 31 files this skill ships, resolves 36 links and 4 code
+dependencies, and prints the exact file, link, dependency and orphan counts to stderr.
+Nodes are grouped by directory, the amber box is always SKILL.md, and anything drawn in
+grey-dashed, amber or red is exactly what `spec_validator.py` would flag too — the same
+check drawn instead of printed. The thin arrows are doc references: SKILL.md and friends
+pointing at a file. The thick blue `needs` arrows are a second, independent signal,
+`import`/`from` statements read straight from each script's AST, showing which scripts
+actually require which others to run. A file can be documented without being imported,
+or imported without ever being linked in prose, and the diagram shows both.
+
+`agents/hallucination-hunter.md` appears in that graph because SKILL.md links it. It
+did not, until recently: SKILL.md named the path in backticks, which is not a link, so
+the only route to the file was through README.md — and README.md is not on the path
+Claude follows under progressive disclosure. The map is what made that visible.
 
 ## Why skill-vision, and not another "skill-tester"?
 
