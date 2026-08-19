@@ -766,8 +766,16 @@ def audit_capabilities(root: Path, lines: list, facts_by_rel: dict,
 
 def audit(root: Path) -> AuditResult:
     res = AuditResult(skill=str(root))
+    # `.github/` is repository plumbing -- CI helpers, release and metadata tooling --
+    # not skill payload. Claude never invokes it: `allowed-tools` reaches `scripts/`,
+    # and a documented claim like "every script runs offline" is a claim about what the
+    # skill does when used, not about the workflow tooling that builds the repository.
+    # Auditing docs against it produces false positives that are impossible to fix
+    # honestly: a repo whose CI talks to an API would have to caveat every offline
+    # claim, including ones in reference files describing the spec rather than itself.
     scripts = [p for p in sorted(root.rglob("*.py"))
                if "__pycache__" not in p.parts and ".git" not in p.parts
+               and ".github" not in p.parts
                and not p.name.startswith("test_")
                and "tests" not in p.parts]
     facts_by_rel = {str(p.relative_to(root)): script_facts(p) for p in scripts}

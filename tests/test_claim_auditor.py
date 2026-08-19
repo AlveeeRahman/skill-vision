@@ -76,6 +76,34 @@ class AuditorTestCase(unittest.TestCase):
         return ca.audit(root).contradictions
 
 
+class TestRepositoryPlumbingIsNotSkillPayload(AuditorTestCase):
+    """`.github/` is CI and release tooling, not something the skill can invoke.
+
+    A repository whose workflow tooling calls an API would otherwise have to caveat
+    every offline claim it makes -- including claims in reference files that describe
+    the Agent Skills spec rather than the repository itself. That is a false positive
+    with no honest fix, which is the exact failure mode that trains people to stop
+    reading the output.
+    """
+
+    def test_networked_workflow_tooling_does_not_falsify_an_offline_claim(self):
+        root = build(
+            self.tmp,
+            "# T\n\nEvery script runs offline on the standard library.\n",
+            {"scripts/pure.py": PURE_SCRIPT, ".github/seo/sync.py": NET_SCRIPT},
+        )
+        self.assertEqual(self.contradictions(root), [])
+
+    def test_a_networked_script_under_scripts_is_still_caught(self):
+        root = build(
+            self.tmp,
+            "# T\n\nEvery script runs offline on the standard library.\n",
+            {"scripts/pure.py": PURE_SCRIPT, "scripts/net.py": NET_SCRIPT},
+        )
+        found = self.contradictions(root)
+        self.assertTrue(any(f.code == "REACH_CLAIM_FALSE" for f in found), found)
+
+
 class TestReachClaims(AuditorTestCase):
     """The check that would have caught the real defect this tool was built for."""
 
