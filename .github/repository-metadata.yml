@@ -21,7 +21,7 @@ primary_keyword: "Claude Agent Skill validator"
 title: "Skill Vision: a Claude Agent Skill validator"
 description: "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scores, a Mermaid map, and a hallucination-hunting subagent."
 
-version: "1.1.1"
+version: "1.1.2"
 license_spdx: MIT
 programming_language: Python
 runtime_platform: Claude Code (Agent Skills)

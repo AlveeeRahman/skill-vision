@@ -2,7 +2,7 @@
 name: skill-vision
 description: "Validate, test and score Claude Agent Skills: spec conformance, script testing, quality grade, security, token cost. Use when authoring or auditing a skill, or before uploading one to claude.ai."
 metadata:
-  version: "1.1.1"
+  version: "1.1.2"
 ---
 
 # Skill Vision

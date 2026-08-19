@@ -339,6 +339,21 @@ python3 ~/.claude/skills/skill-vision/scripts/spec_validator.py path/to/your-ski
 
 </details>
 
+## What's new in v1.1.2
+
+**The description was too long to upload to claude.ai.** Its uploader caps `description`
+at 200 characters. The Agent Skills spec and the Skills API allow 1024, and
+`spec_validator.py` encodes 1024, so the skill passed every local check and would still
+have been rejected at 461 characters. It is 194 now, rewritten rather than truncated: a
+plain cut keeps the "what it does" half and deletes the entire "Use when…" clause, which
+is the half that decides whether the skill triggers at all.
+
+**The hallucination-hunter subagent was unreachable.** SKILL.md named
+`agents/hallucination-hunter.md` in backticks, which is text and not a link, so the only
+route to the file ran through README.md — a file Claude does not read under progressive
+disclosure. `skill_mapper.py` found it, on this repository, using this repository's own
+graph resolver.
+
 ## What's new in v1.1.1
 
 **`script_tester.py` reported PASS on a suite where nothing passed.** `calculate_summary`
