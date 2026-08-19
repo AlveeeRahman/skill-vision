@@ -1,13 +1,11 @@
-# Source of truth for everything a search engine sees about this repository.
+# What this repository says about itself, in one place.
 #
-# The GitHub Pages site under docs/ and the repository description, homepage and
-# topics on github.com are both generated from this file by .github/seo/seo.py.
-# Change a fact here, not in the generated blocks; CI fails the pull request when
-# the two disagree.
+# This is a record, not a contract: no script reads it and no CI job enforces it.
+# It exists so that the next person -- or the next agent -- changing the repository
+# description, the topics, the README opening or the Pages <head> has one file to read
+# instead of reverse-engineering the intent from three places.
 #
-#   python .github/seo/seo.py validate    # this file is well-formed and truthful
-#   python .github/seo/seo.py build       # regenerate docs/
-#   python .github/seo/seo.py verify      # quality gates over the built site
+# When you change a fact here, change it in the places listed under `appears_in` too.
 
 schema_version: 1
 repository: AlveeeRahman/skill-vision
@@ -16,26 +14,26 @@ name: Skill Vision
 canonical_url: https://alveeerahman.github.io/skill-vision/
 sitemap_url: https://alveeerahman.github.io/skill-vision/sitemap.xml
 
-# One precise phrase, used once each in the title, the opening paragraph, one
-# heading, the repository description and the Pages title. Not repeated beyond that.
+# One precise phrase. It belongs in the title, the opening paragraph, one heading and
+# the repository description -- once each, not repeated for its own sake.
 primary_keyword: "Claude Agent Skill validator"
 
 title: "Skill Vision: a Claude Agent Skill validator"
-site_name: Skill Vision
 description: "A Claude Agent Skill validator for Claude Code: spec conformance, script testing, quality and security scoring, a Mermaid skill map, and per-skill token cost."
 
 version: "1.1.1"
 license_spdx: MIT
-license_url: https://github.com/AlveeeRahman/skill-vision/blob/HEAD/LICENSE
 programming_language: Python
 runtime_platform: Claude Code (Agent Skills)
 author:
   name: Alvee Rahman
   url: https://github.com/AlveeeRahman
 
-# Checked against scripts/ on every run, so the headline number cannot drift.
+# Seven CLIs under scripts/. The Pages site listed six and omitted claim_auditor.py,
+# which both sibling repositories run in their own CI.
 runnable_scripts: 7
 
+# The CI matrix runs every version listed here.
 supported_python:
   - "3.9"
   - "3.10"
@@ -43,12 +41,13 @@ supported_python:
   - "3.12"
   - "3.13"
 
-# Nothing in scripts/ opens a connection. This is not a comment but a checked claim:
-# `seo.py verify` fails if any script under scripts/ starts making network calls.
+# Nothing under scripts/ opens a connection, and there are no third-party imports.
 network_surfaces: []
 
-# GitHub allows 20. Lowercase words separated by hyphens, describing what the
-# software is rather than how good it is.
+# GitHub allows 20. Lowercase words separated by hyphens, describing what the software
+# is rather than how good it is. best-claude-skills and must-have-skills were dropped
+# for promoting rather than describing; codebase-mapping and mermaid-codebase were
+# duplicates of codebase-map and mermaid.
 topics:
   - agent-skills
   - ai-agents
@@ -67,20 +66,9 @@ topics:
   - skill-validator
   - static-analysis
 
-og_image: assets/social-preview.png
-og_image_alt: "Skill Vision: a Claude Agent Skill validator"
-
-resources:
-  releases: true
-  examples_label: A sample skill to validate against
-  examples_path: assets/sample-skill
-  benchmarks_label: Expected validator output
-  benchmarks_path: expected_outputs
-
-# The date the published content last changed in a way worth recrawling. Drives
-# sitemap lastmod and gates IndexNow, so bump it for content changes only, never
-# for styling.
-content_updated: "2026-08-18"
+# 1280x640, the size GitHub asks for. docs/assets/social-preview.svg is the editable
+# source.
+social_preview: docs/assets/social-preview.png
 
 suite:
   - name: Skill Vision
@@ -90,10 +78,10 @@ suite:
   - name: Research Hound
     url: https://alveeerahman.github.io/research-hound/
 
-indexing:
-  google_search_console: true
-  bing_webmaster_tools: true
-  indexnow: true
-  # Public by protocol design: IndexNow proves ownership by serving this key at
-  # <canonical_url><key>.txt. It authorises nothing else.
-  indexnow_key: 2b7e4a06c1f34d8fae59b0d27c6413ef
+# The files that repeat the facts above. Keep them in step by hand.
+appears_in:
+  - README.md
+  - SKILL.md
+  - docs/index.html
+  - docs/sitemap.xml
+  - github.com repository description, homepage and topics
