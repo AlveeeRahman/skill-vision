@@ -12,6 +12,9 @@
   Python scripts of the skill under test (with a timeout) in order to test them. Only
   run it against skill code you trust, exactly as you would before running that code
   yourself.
+- **Scanned on every push.** NVIDIA SkillSpector (static analyzers, pinned version) runs in
+  CI; reviewed false positives are listed with reasons in `.skillspector-baseline.yaml`, and
+  each run's summary shows what was suppressed.
 
 ## Reporting a vulnerability
 

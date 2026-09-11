@@ -1,0 +1,63 @@
+# SkillSpector baseline: findings reviewed by hand and judged not to be problems in this
+# repository. Each rule names the SkillSpector rule id, the file it applies to, and why.
+# CI passes this file to `skillspector scan --baseline`; every run's summary lists what it
+# suppressed. Re-check locally with:
+#   skillspector scan . --no-llm --baseline .skillspector-baseline.yaml --show-suppressed
+# A finding that is not covered here is not hidden: it stays in the report and the score.
+#
+# Context: skill-vision is itself a validator and security scorer for skills. Its
+# vocabulary (audit, scan, security), its claim-audit marker, and the deliberately
+# dangerous string fixtures in its tests are what a pattern scanner trips on.
+version: 2
+rules:
+  - id: YR4
+    path: README.md
+    reason: "The YARA 'offensive tooling' rule matches the vocabulary of a validator that scores security (audit, scan, security); the repository contains no exploit or reconnaissance code."
+  - id: YR4
+    path: SKILL.md
+    reason: "Same vocabulary match on the skill description and its documentation of the claim-audit marker; no offensive code."
+  - id: YR4
+    path: scripts/claim_auditor.py
+    reason: "The script's docstring documents the <!-- claim-audit: ignore-next-block --> marker it honours; no offensive code."
+  - id: YR4
+    path: tests/test_claim_auditor.py
+    reason: "Test fixtures containing frontmatter text and the claim-audit marker; no offensive code."
+  - id: P2
+    path: SKILL.md
+    reason: "Documents the <!-- claim-audit: ignore-next-block --> HTML marker that claim_auditor.py honours; it is not a hidden instruction to the agent."
+  - id: AE1
+    path: SKILL.md
+    reason: "References to the bundled demo skill under assets/sample-skill (its README and SKILL.md.fixture), which are in the repository; the scanner treats nested skill files as unanalysable external artifacts."
+  - id: TM1
+    path: README.md
+    reason: "A documentation example that removes the demo manifest it copied two lines earlier (a package may contain only one SKILL.md); not a tool call."
+  - id: TM1
+    path: tests/test_security_scorer.py
+    reason: "String fixtures with shell=True and os.system('rm -rf ...') that security_scorer.py must detect; they are never executed."
+  - id: PE3
+    path: tests/test_security_scorer.py
+    reason: "A path-traversal string fixture that security_scorer.py must detect; never executed."
+  - id: LP1
+    path: scripts/*.py
+    reason: "Shell and file access by the bundled scripts is covered by the declared allowed-tools scope Bash(python3 scripts/*); SkillSpector 2.11.2 does not parse Claude Code's scoped Bash(pattern) form, and the scoped form is kept because it is the more precise permission."
+  - id: LP1
+    path: assets/sample-skill/*
+    reason: "The bundled demo skill used for practising the validators; it is documentation, not part of this skill's runtime."
+  - id: E2
+    path: scripts/script_tester.py
+    reason: "The environment is copied only to hand it, plus PYTHONDONTWRITEBYTECODE, to the user's own scripts under test; nothing is logged or transmitted (SECURITY.md describes this exception)."
+  - id: RA2
+    path: README.md
+    reason: "A sentence about uploading a skill to claude.ai and the description length cap; no persistence mechanism."
+  - id: RA2
+    path: scripts/script_tester.py
+    reason: "A standard-library module allowlist that happens to contain the names netrc and plistlib; no persistence mechanism."
+  - id: RP1
+    path: references/validator-comparison.md
+    reason: "A comparison table naming a third-party npx tool; not an instruction to run it."
+  - id: AST4
+    path: scripts/script_tester.py
+    reason: "subprocess.run with an explicit argument list and shell=False, running the scripts under test with a timeout."
+  - id: AST4
+    path: tests/test_skill_mapper.py
+    reason: "subprocess.run with an explicit argument list and shell=False in a test."

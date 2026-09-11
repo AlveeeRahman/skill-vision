@@ -1,0 +1,135 @@
+name: SkillSpector Safety
+
+# Static safety scan of this skill with NVIDIA SkillSpector. Findings that were reviewed
+# and judged false positives are listed, each with a reason, in .skillspector-baseline.yaml;
+# the scan drops them before scoring, and the step summary lists what was suppressed so the
+# decision stays visible. Runs without an LLM provider (`--no-llm`): the static analyzers
+# only. To add the semantic analyzers, set SKILLSPECTOR_PROVIDER and the matching provider
+# key as repository secrets and remove `--no-llm`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SKILLSPECTOR_VERSION: v2.11.2
+  BASELINE: .skillspector-baseline.yaml
+
+jobs:
+  skillspector:
+    name: SkillSpector scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # SkillSpector declares requires-python >=3.12.
+          python-version: "3.12"
+
+      - name: Install SkillSpector ${{ env.SKILLSPECTOR_VERSION }}
+        run: python -m pip install --quiet "git+https://github.com/NVIDIA/skillspector.git@${SKILLSPECTOR_VERSION}"
+
+      # `skillspector scan` exits 1 when the verdict is DO_NOT_INSTALL (score > 50)
+      # and 2 on an error. Exit 1 must not abort the job here, or the summary and
+      # the report artifacts would never be produced; the verdict is applied in
+      # the last step instead. `|| code=$?` is required under GitHub's `bash -e`.
+      - name: Run SkillSpector (JSON)
+        run: |
+          code=0
+          skillspector scan . --no-llm --baseline "$BASELINE" --format json --output skillspector-report.json || code=$?
+          case "$code" in
+            0|1) ;;
+            *) echo "::error::skillspector scan failed with exit code $code"; exit 1 ;;
+          esac
+
+      - name: Run SkillSpector (Markdown)
+        run: |
+          code=0
+          skillspector scan . --no-llm --baseline "$BASELINE" --format markdown --output skillspector-report.md || code=$?
+          case "$code" in
+            0|1) ;;
+            *) echo "::error::skillspector scan failed with exit code $code"; exit 1 ;;
+          esac
+
+      - name: Summarize score and verdict
+        id: parse_report
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("skillspector-report.json").read_text(encoding="utf-8"))
+
+          # Single-skill reports carry `risk_assessment.{score,severity,recommendation}`.
+          # A recursive multi-skill report (several SKILL.md files) instead carries
+          # `max_risk_score` and `risk_recommendation` at the top level.
+          assessment = report.get("risk_assessment") or {}
+          risk_score = assessment.get("score", report.get("max_risk_score"))
+          severity = assessment.get("severity")
+          recommendation = assessment.get("recommendation", report.get("risk_recommendation"))
+
+          if not isinstance(risk_score, (int, float)):
+              raise SystemExit("skillspector-report.json has no risk score")
+
+          # Same rule SkillSpector itself uses for `safe_to_install` in its MCP
+          # server: score <= 50, i.e. the recommendation is not DO_NOT_INSTALL.
+          safe = risk_score <= 50 and recommendation != "DO_NOT_INSTALL"
+          safe_text = "true" if safe else "false"
+
+          issues = report.get("issues") or []
+          suppressed = report.get("suppressed") or []
+          lines = [
+              "## SkillSpector safety report",
+              "",
+              f"- skillspector: `{(report.get('metadata') or {}).get('skillspector_version', '?')}` (static analyzers only)",
+              f"- risk_score: `{risk_score}`",
+              f"- severity: `{severity}`",
+              f"- recommendation: `{recommendation}`",
+              f"- safe_to_install: `{safe_text}`",
+              f"- open findings: `{len(issues)}`",
+              f"- suppressed by baseline: `{report.get('suppressed_count', len(suppressed))}`",
+          ]
+          if issues:
+              lines += ["", "### Open findings", "", "| severity | rule | file | line |", "|---|---|---|---|"]
+              for f in issues:
+                  loc = f.get("location") or {}
+                  lines.append(f"| {f.get('severity')} | {f.get('id') or f.get('rule_id')} | `{loc.get('file')}` | {loc.get('start_line') or ''} |")
+          if suppressed:
+              lines += ["", "### Suppressed by .skillspector-baseline.yaml", "", "| rule | file | reason |", "|---|---|---|"]
+              for f in suppressed:
+                  loc = f.get("location") or {}
+                  reason = str(f.get("suppression_reason") or f.get("reason") or "").replace("|", "/")
+                  lines.append(f"| {f.get('id') or f.get('rule_id')} | `{loc.get('file')}` | {reason} |")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("\n".join(lines) + "\n")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as outputs:
+              outputs.write(f"safe_to_install={safe_text}\n")
+              outputs.write(f"risk_score={risk_score}\n")
+              outputs.write(f"recommendation={recommendation}\n")
+          PY
+
+      - name: Upload SkillSpector artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skillspector-report
+          path: |
+            skillspector-report.json
+            skillspector-report.md
+          if-no-files-found: warn
+
+      - name: Fail when unsafe
+        if: steps.parse_report.outputs.safe_to_install != 'true'
+        run: |
+          echo "::error::SkillSpector marked this repository as unsafe to install (recommendation: ${{ steps.parse_report.outputs.recommendation }}, risk_score: ${{ steps.parse_report.outputs.risk_score }})."
+          exit 1

@@ -1,6 +1,7 @@
 # Skill Vision: a Claude Agent Skill validator
 
 [![CI](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml)
+[![SkillSpector Safety](https://github.com/AlveeeRahman/skill-vision/actions/workflows/skillspector.yml/badge.svg)](https://github.com/AlveeeRahman/skill-vision/actions/workflows/skillspector.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![Zero runtime dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#%EF%B8%8F-under-the-hood-the-five-validators)
@@ -10,6 +11,24 @@ part of a three-skill suite with [Agent Oracle](https://alveeerahman.github.io/a
 and [Research Hound](https://alveeerahman.github.io/research-hound/).
 
 **skill-vision** is a Claude Agent Skill validator — an [Agent Skill](https://code.claude.com/docs/en/skills) for Claude Code that inspects your *other* skills before they ship. Install it, then just ask Claude *"validate my skill"* and Claude boards your skill, runs the right inspections, and explains what would keep it from loading, uploading, or triggering.
+
+## Automated safety score (SkillSpector)
+
+Every push and pull request is scanned with [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector)
+v2.11.2, static analyzers only (`--no-llm`). It is an external, independent scanner;
+`scripts/security_scorer.py` is this skill's own heuristic, and the two are not substitutes.
+
+- The scan reads [`.skillspector-baseline.yaml`](.skillspector-baseline.yaml), a hand-reviewed
+  list of false positives with a reason for each. Nothing else is filtered, and every run's
+  summary lists exactly what the baseline suppressed. For this repository the suppressed
+  findings are its own vocabulary (audit, scan, security), the claim-audit marker, and the
+  deliberately dangerous string fixtures its tests feed to `security_scorer.py`.
+- The summary publishes the report's risk score, severity and recommendation, and the JSON
+  and Markdown reports are kept as workflow artifacts.
+- The check fails when SkillSpector's verdict is `DO_NOT_INSTALL` (a risk score above 50).
+  A `CAUTION` verdict passes but is visible in the summary.
+- The semantic analyzers need a model provider: set `SKILLSPECTOR_PROVIDER` and the matching
+  provider key as repository secrets and drop `--no-llm` from the workflow.
 
 ## What's in it
 

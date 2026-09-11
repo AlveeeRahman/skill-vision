@@ -1,6 +1,7 @@
 ---
 name: skill-vision
 description: "Validate, test and score Claude Agent Skills: spec conformance, script testing, quality grade, security, token cost. Use when authoring or auditing a skill, or before uploading one to claude.ai."
+allowed-tools: Read Bash(python3 scripts/*)
 metadata:
   version: "1.1.2"
 ---
