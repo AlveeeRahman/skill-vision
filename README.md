@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="https://alveeerahman.github.io/skill-vision/"><img src="docs/assets/icon.png" alt="Skill Vision" width="128" height="128"></a>
+</p>
+
 # Skill Vision: a Claude Agent Skill validator
 
 [![CI](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/AlveeeRahman/skill-vision/actions/workflows/ci.yml)
